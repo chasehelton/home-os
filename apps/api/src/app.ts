@@ -9,6 +9,7 @@ import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerTodoRoutes } from './routes/todos.js';
 import { registerRecipeRoutes } from './routes/recipes.js';
+import { registerMealPlanRoutes } from './routes/mealplan.js';
 
 export interface AppDeps {
   env: Env;
@@ -51,6 +52,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   await registerAuthRoutes(app);
   await registerTodoRoutes(app);
   await registerRecipeRoutes(app);
+  await registerMealPlanRoutes(app);
 
   app.addHook('onClose', async () => {
     sqlite.close();
