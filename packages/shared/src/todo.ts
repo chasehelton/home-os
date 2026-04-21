@@ -1,31 +1,50 @@
 import { z } from 'zod';
 import { Scope } from './scope.js';
 
+const Id = z.string().min(1).max(64);
+const IsoDateTime = z.string().datetime({ offset: true });
+
 export const Todo = z.object({
-  id: z.string().uuid(),
+  id: Id,
   scope: Scope,
-  ownerUserId: z.string().uuid().nullable(),
+  ownerUserId: Id.nullable(),
   title: z.string().min(1).max(500),
   notes: z.string().max(10_000).nullable(),
-  dueAt: z.string().datetime().nullable(),
-  completedAt: z.string().datetime().nullable(),
-  createdBy: z.string().uuid(),
-  createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime(),
+  dueAt: IsoDateTime.nullable(),
+  completedAt: IsoDateTime.nullable(),
+  createdBy: Id,
+  createdAt: IsoDateTime,
+  updatedAt: IsoDateTime,
 });
 export type Todo = z.infer<typeof Todo>;
 
-export const CreateTodoInput = Todo.pick({
-  scope: true,
-  title: true,
-  notes: true,
-  dueAt: true,
-}).extend({
-  ownerUserId: z.string().uuid().nullable().optional(),
+export const CreateTodoInput = z.object({
+  scope: Scope,
+  title: z.string().min(1).max(500),
+  notes: z.string().max(10_000).nullable().optional(),
+  dueAt: IsoDateTime.nullable().optional(),
+  ownerUserId: Id.nullable().optional(),
 });
 export type CreateTodoInput = z.infer<typeof CreateTodoInput>;
 
-export const UpdateTodoInput = CreateTodoInput.partial().extend({
-  completedAt: z.string().datetime().nullable().optional(),
-});
+export const UpdateTodoInput = z
+  .object({
+    title: z.string().min(1).max(500).optional(),
+    notes: z.string().max(10_000).nullable().optional(),
+    dueAt: IsoDateTime.nullable().optional(),
+    scope: Scope.optional(),
+    ownerUserId: Id.nullable().optional(),
+    completedAt: IsoDateTime.nullable().optional(),
+  })
+  .strict();
 export type UpdateTodoInput = z.infer<typeof UpdateTodoInput>;
+
+export const ListTodosQuery = z.object({
+  scope: z.enum(['household', 'user', 'all']).optional().default('all'),
+  includeCompleted: z
+    .union([z.boolean(), z.enum(['true', 'false'])])
+    .optional()
+    .default(true)
+    .transform((v) => (typeof v === 'boolean' ? v : v === 'true')),
+});
+export type ListTodosQuery = z.infer<typeof ListTodosQuery>;
