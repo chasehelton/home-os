@@ -7,6 +7,7 @@ import type Database from 'better-sqlite3';
 import { loadEnv, type Env } from './env.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerTodoRoutes } from './routes/todos.js';
 
 export interface AppDeps {
   env: Env;
@@ -44,6 +45,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
 
   await registerHealthRoutes(app);
   await registerAuthRoutes(app);
+  await registerTodoRoutes(app);
 
   app.addHook('onClose', async () => {
     sqlite.close();
