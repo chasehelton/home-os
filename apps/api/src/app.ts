@@ -6,6 +6,7 @@ import { openDb, type DB } from '@home-os/db';
 import type Database from 'better-sqlite3';
 import { loadEnv, type Env } from './env.js';
 import { registerHealthRoutes } from './routes/health.js';
+import { registerAuthRoutes } from './routes/auth.js';
 
 export interface AppDeps {
   env: Env;
@@ -13,11 +14,17 @@ export interface AppDeps {
   sqlite: Database.Database;
 }
 
-export async function buildApp(env: Env = loadEnv()): Promise<{
+export interface BuildAppOptions {
+  env?: Env;
+  dataDir?: string;
+}
+
+export async function buildApp(options: BuildAppOptions = {}): Promise<{
   app: FastifyInstance;
   deps: AppDeps;
 }> {
-  const { db, sqlite } = openDb();
+  const env = options.env ?? loadEnv();
+  const { db, sqlite } = openDb({ dataDir: options.dataDir ?? env.HOME_OS_DATA_DIR });
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === 'test' ? 'silent' : 'info',
@@ -36,6 +43,7 @@ export async function buildApp(env: Env = loadEnv()): Promise<{
   app.decorate('deps', deps);
 
   await registerHealthRoutes(app);
+  await registerAuthRoutes(app);
 
   app.addHook('onClose', async () => {
     sqlite.close();

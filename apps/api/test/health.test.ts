@@ -1,31 +1,24 @@
-import { describe, it, expect, afterAll } from 'vitest';
-import { buildApp } from '../src/app.js';
+import { describe, it, expect, afterAll, beforeAll } from 'vitest';
+import { makeTestApp } from './_helpers.js';
 
-const env = {
-  HOME_OS_API_HOST: '127.0.0.1',
-  HOME_OS_API_PORT: 0,
-  HOME_OS_WEB_ORIGIN: 'http://localhost:5173',
-  HOME_OS_SESSION_SECRET: 'test-secret-test-secret-test-secret-test-secret',
-  HOME_OS_DATA_DIR: '/tmp/home-os-test-data',
-  HOME_OS_AI_PROVIDER: 'disabled',
-  NODE_ENV: 'test' as const,
-};
+let ctx: Awaited<ReturnType<typeof makeTestApp>>;
 
-const { app } = await buildApp(env);
-
+beforeAll(async () => {
+  ctx = await makeTestApp();
+});
 afterAll(async () => {
-  await app.close();
+  await ctx.cleanup();
 });
 
 describe('health', () => {
   it('GET /health/live returns ok', async () => {
-    const res = await app.inject({ method: 'GET', url: '/health/live' });
+    const res = await ctx.app.inject({ method: 'GET', url: '/health/live' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
   });
 
   it('GET /health/ready returns ok when db is reachable', async () => {
-    const res = await app.inject({ method: 'GET', url: '/health/ready' });
+    const res = await ctx.app.inject({ method: 'GET', url: '/health/ready' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toMatchObject({ status: 'ok', db: 'ok' });
   });

@@ -1,15 +1,7 @@
-import path from 'node:path';
-import { fileURLToPath } from 'node:url';
-import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
-import { openDb } from './index.js';
+import { runMigrations } from './index.js';
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const migrationsFolder = path.resolve(__dirname, '..', 'migrations');
-
-const { db, sqlite } = openDb();
-try {
-  migrate(db, { migrationsFolder });
+const isCli = import.meta.url === `file://${process.argv[1]}`;
+if (isCli) {
+  runMigrations();
   console.log('Migrations applied.');
-} finally {
-  sqlite.close();
 }
