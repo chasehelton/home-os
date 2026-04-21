@@ -1,0 +1,38 @@
+{
+  "name": "home-os",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Self-hosted household OS: kitchen kiosk + mobile PWA + API, running on a Raspberry Pi.",
+  "packageManager": "pnpm@10.33.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev": "pnpm -r --parallel --filter=./apps/api --filter=./apps/web dev",
+    "dev:api": "pnpm --filter=@home-os/api dev",
+    "dev:web": "pnpm --filter=@home-os/web dev",
+    "dev:kiosk": "pnpm --filter=@home-os/kiosk dev",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "db:generate": "pnpm --filter=@home-os/db generate",
+    "db:migrate": "pnpm --filter=@home-os/db migrate"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.18.0",
+    "@types/node": "^22.10.5",
+    "eslint": "^9.18.0",
+    "prettier": "^3.4.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.20.0",
+    "vitest": "^2.1.8"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": ["better-sqlite3", "esbuild"]
+  }
+}
