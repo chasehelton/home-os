@@ -19,7 +19,10 @@
     "@home-os/db": "workspace:*",
     "@home-os/shared": "workspace:*",
     "better-sqlite3": "^11.7.0",
+    "drizzle-orm": "^0.38.3",
     "fastify": "^5.2.1",
+    "nanoid": "^5.0.9",
+    "openid-client": "^6.1.7",
     "pino": "^9.5.0",
     "zod": "^3.24.1"
   },

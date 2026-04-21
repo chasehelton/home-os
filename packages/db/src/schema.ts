@@ -8,8 +8,11 @@ import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
 
 export const users = sqliteTable('users', {
   id: text('id').primaryKey(),
+  googleSub: text('google_sub').unique(),
   email: text('email').notNull().unique(),
+  emailVerified: integer('email_verified', { mode: 'boolean' }).notNull().default(false),
   displayName: text('display_name').notNull(),
+  pictureUrl: text('picture_url'),
   color: text('color'),
   pinHash: text('pin_hash'),
   createdAt: text('created_at')

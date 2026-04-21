@@ -17,14 +17,17 @@ export function dataDir(): string {
   return path.join(REPO_ROOT, '.data');
 }
 
-export function ensureDataDirs(): string {
-  const root = dataDir();
+export function ensureDataDirs(root: string = dataDir()): string {
   for (const sub of ['db', 'images', 'litestream', 'backups']) {
     fs.mkdirSync(path.join(root, sub), { recursive: true });
   }
   return root;
 }
 
-export function dbFilePath(): string {
-  return path.join(dataDir(), 'db', 'home-os.sqlite');
+export function dbFilePath(root: string = dataDir()): string {
+  return path.join(root, 'db', 'home-os.sqlite');
+}
+
+export function migrationsDir(): string {
+  return path.join(REPO_ROOT, 'packages', 'db', 'migrations');
 }
