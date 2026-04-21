@@ -62,3 +62,27 @@ export const auditLog = sqliteTable('audit_log', {
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
+
+export const recipes = sqliteTable('recipes', {
+  id: text('id').primaryKey(),
+  sourceUrl: text('source_url'),
+  title: text('title').notNull(),
+  description: text('description'),
+  author: text('author'),
+  siteName: text('site_name'),
+  domain: text('domain'),
+  imagePath: text('image_path'),
+  imageSourceUrl: text('image_source_url'),
+  importStatus: text('import_status', {
+    enum: ['imported', 'partial', 'manual'],
+  }).notNull(),
+  createdBy: text('created_by')
+    .notNull()
+    .references(() => users.id),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+});

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TodoList } from './components/TodoList';
+import { Recipes } from './components/Recipes';
 
 interface Me {
   id: string;
@@ -8,9 +9,12 @@ interface Me {
   pictureUrl: string | null;
 }
 
+type Tab = 'todos' | 'recipes';
+
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState<Tab>('todos');
 
   async function refresh() {
     setLoading(true);
@@ -52,7 +56,22 @@ export function App() {
   return (
     <main className="flex min-h-full flex-col">
       <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-        <h1 className="text-xl font-semibold">home-os</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-xl font-semibold">home-os</h1>
+          <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
+            {(['todos', 'recipes'] as Tab[]).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`rounded px-3 py-1 capitalize ${
+                  tab === t ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
+          </nav>
+        </div>
         <div className="flex items-center gap-3 text-sm">
           {me.pictureUrl && (
             <img
@@ -71,7 +90,7 @@ export function App() {
           </button>
         </div>
       </header>
-      <TodoList currentUserId={me.id} />
+      {tab === 'todos' ? <TodoList currentUserId={me.id} /> : <Recipes />}
     </main>
   );
 }

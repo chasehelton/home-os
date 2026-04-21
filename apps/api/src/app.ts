@@ -2,17 +2,19 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import sensible from '@fastify/sensible';
-import { openDb, type DB } from '@home-os/db';
+import { openDb, type DB, ensureDataDirs, dataDir as resolveDataDir } from '@home-os/db';
 import type Database from 'better-sqlite3';
 import { loadEnv, type Env } from './env.js';
 import { registerHealthRoutes } from './routes/health.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerTodoRoutes } from './routes/todos.js';
+import { registerRecipeRoutes } from './routes/recipes.js';
 
 export interface AppDeps {
   env: Env;
   db: DB;
   sqlite: Database.Database;
+  dataDir: string;
 }
 
 export interface BuildAppOptions {
@@ -25,7 +27,9 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   deps: AppDeps;
 }> {
   const env = options.env ?? loadEnv();
-  const { db, sqlite } = openDb({ dataDir: options.dataDir ?? env.HOME_OS_DATA_DIR });
+  const dataDir = options.dataDir ?? env.HOME_OS_DATA_DIR ?? resolveDataDir();
+  ensureDataDirs(dataDir);
+  const { db, sqlite } = openDb({ dataDir });
   const app = Fastify({
     logger: {
       level: env.NODE_ENV === 'test' ? 'silent' : 'info',
@@ -40,12 +44,13 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
     credentials: true,
   });
 
-  const deps: AppDeps = { env, db, sqlite };
+  const deps: AppDeps = { env, db, sqlite, dataDir };
   app.decorate('deps', deps);
 
   await registerHealthRoutes(app);
   await registerAuthRoutes(app);
   await registerTodoRoutes(app);
+  await registerRecipeRoutes(app);
 
   app.addHook('onClose', async () => {
     sqlite.close();
