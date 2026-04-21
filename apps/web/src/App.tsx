@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { TodoList } from './components/TodoList';
 import { Recipes } from './components/Recipes';
+import { MealPlan } from './components/MealPlan';
 
 interface Me {
   id: string;
@@ -9,7 +10,7 @@ interface Me {
   pictureUrl: string | null;
 }
 
-type Tab = 'todos' | 'recipes';
+type Tab = 'todos' | 'recipes' | 'meals';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -59,7 +60,7 @@ export function App() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">home-os</h1>
           <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(['todos', 'recipes'] as Tab[]).map((t) => (
+            {(['todos', 'recipes', 'meals'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -90,7 +91,13 @@ export function App() {
           </button>
         </div>
       </header>
-      {tab === 'todos' ? <TodoList currentUserId={me.id} /> : <Recipes />}
+      {tab === 'todos' ? (
+        <TodoList currentUserId={me.id} />
+      ) : tab === 'recipes' ? (
+        <Recipes />
+      ) : (
+        <MealPlan />
+      )}
     </main>
   );
 }

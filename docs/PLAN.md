@@ -6,16 +6,16 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ## 🚦 Current Status (2026-04-21)
 
-**Up next: Phase 4 — Meal Planning.** Branch `main` as of PR #3 merge; create a new branch `phase-4-mealplan` to start.
+**Up next: Phase 5 — Calendar READ sync.** Branch `main`; create `phase-5-calendar-read` after P4 PR merge.
 
 | Phase | Status | PR |
 | --- | --- | --- |
 | P0 Foundation | ✅ merged | #0 (initial) |
 | P1 Identity & Ownership | ✅ merged | #1 |
 | P2 Todos | ✅ merged | #2 |
-| P3 Recipes (defuddle markdown) | ✅ PR open, green CI | #3 |
-| **P4 Meal Planning** | ⏳ **next** | — |
-| P5 Calendar READ | pending | — |
+| P3 Recipes (defuddle markdown) | ✅ merged | #3 |
+| P4 Meal Planning | ✅ PR open | — |
+| **P5 Calendar READ** | ⏳ **next** | — |
 | P6 Calendar UI | pending | — |
 | P7 Calendar WRITE | pending | — |
 | P8 Kiosk shell | pending | — |
@@ -23,7 +23,7 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 | P10 Deploy & hardening | pending | — |
 | P11 Reminders | pending | — |
 
-**Repo health:** 36/36 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 45/45 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
@@ -222,10 +222,12 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Web UI: top-level Todos/Recipes nav, grid list, detail with `marked`-rendered markdown, edit form, and **step mode** for the kiosk (splits on headings + numbered list items, big Back/Next buttons).
 - Migration `0002_organic_spencer_smythe.sql`. 9 new tests (parse + routes).
 
-### Phase 4 — Meal Planning
-- Week grid (day × slot) UI.
-- Drag/drop recipe onto slot (kiosk: tap-to-assign).
-- "What's for dinner" quick view on kiosk home.
+### Phase 4 — Meal Planning ✅
+- `meal_plan_entries` table (date YYYY-MM-DD + slot enum + optional `recipeId` FK with `ON DELETE SET NULL` + optional free-text title for leftovers/takeout + notes). Index on (date, slot).
+- REST: `GET /api/meal-plan?weekStart=…` (returns `{from,to,entries}`), `GET /api/meal-plan/tonight` for the kiosk home, plus `POST/PATCH/DELETE` on `/api/meal-plan/:id`.
+- Web UI: new "Meals" tab with a 7-day × 4-slot grid, prev/this/next-week navigation, per-cell add button, modal editor to pick a recipe or enter free text, and a "Tonight: …" banner when today's dinner is planned.
+- Validation: either `recipeId` or `title` required; strict YYYY-MM-DD date format. Free-text title is preserved if the recipe is later deleted.
+- 9 new tests covering auth, windowing, validation, update/delete, and FK cascade-to-null.
 
 ### Phase 5 — Calendar (READ sync only)
 - Google Calendar OAuth connect per user (incremental scopes).

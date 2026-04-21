@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
 
 // ---------------------------------------------------------------------------
 // Phase 0 / 1 tables. Additional tables (recipes, meal plans, calendar, etc.)
@@ -86,3 +86,31 @@ export const recipes = sqliteTable('recipes', {
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
 });
+
+// Phase 4 — Meal planning. One row per planned meal. Multiple entries per
+// (date, slot) are allowed (e.g. several snacks in a day). recipeId is a
+// soft reference: if the underlying recipe is deleted the entry is preserved
+// with just its stored title for historical context.
+export const mealPlanEntries = sqliteTable(
+  'meal_plan_entries',
+  {
+    id: text('id').primaryKey(),
+    date: text('date').notNull(),
+    slot: text('slot', { enum: ['breakfast', 'lunch', 'dinner', 'snack'] }).notNull(),
+    recipeId: text('recipe_id').references(() => recipes.id, { onDelete: 'set null' }),
+    title: text('title'),
+    notes: text('notes'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    dateSlotIdx: index('meal_plan_entries_date_slot_idx').on(t.date, t.slot),
+  })
+);
