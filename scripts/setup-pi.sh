@@ -88,14 +88,16 @@ chown -R "${RUN_USER}:${RUN_USER}" "$DATA_DIR"
 # 3. Build the app (so the systemd unit has something to start).
 # -----------------------------------------------------------------------------
 echo "==> pnpm install + build"
-sudo -u "$RUN_USER" -H bash -lc "cd '${REPO_DIR}' && '${PNPM_BIN}' install --frozen-lockfile && '${PNPM_BIN}' build"
+PNPM_DIR="$(dirname "$PNPM_BIN")"
+sudo -u "$RUN_USER" -H bash -lc \
+  "export PATH='${PNPM_DIR}':\$PATH && cd '${REPO_DIR}' && pnpm install --frozen-lockfile && pnpm build"
 
 # -----------------------------------------------------------------------------
 # 4. Apply migrations via the safe path.
 # -----------------------------------------------------------------------------
 echo "==> running safe migrations"
 sudo -u "$RUN_USER" -H bash -lc \
-  "cd '${REPO_DIR}' && HOME_OS_DATA_DIR='${DATA_DIR}' '${PNPM_BIN}' --filter=@home-os/db migrate:safe"
+  "export PATH='${PNPM_DIR}':\$PATH && cd '${REPO_DIR}' && HOME_OS_DATA_DIR='${DATA_DIR}' pnpm --filter=@home-os/db migrate:safe"
 
 # -----------------------------------------------------------------------------
 # 5. Install & enable the systemd unit.
