@@ -35,14 +35,24 @@ echo "    user:     ${RUN_USER}"
 echo "    data dir: ${DATA_DIR}"
 
 # -----------------------------------------------------------------------------
-# 1. Deps must already be present (pnpm, node 22, tailscale).
+# 1. Deps must already be present (node 22, tailscale on PATH; pnpm on the
+#    run user's PATH — sudo strips PATH so we check as the user).
 # -----------------------------------------------------------------------------
-for cmd in node pnpm tailscale; do
+for cmd in node tailscale; do
   if ! command -v "$cmd" >/dev/null 2>&1; then
     echo "ERROR: \`$cmd\` not in PATH. Install it before running setup-pi.sh." >&2
     exit 1
   fi
 done
+
+# pnpm commonly lives under ~/.local/share/pnpm or corepack shims that root
+# doesn't see. Resolve it in the run user's login shell.
+PNPM_BIN="$(sudo -u "$RUN_USER" -H bash -lc 'command -v pnpm' 2>/dev/null || true)"
+if [ -z "$PNPM_BIN" ]; then
+  echo "ERROR: \`pnpm\` not found for user ${RUN_USER}. Install it (e.g. \`corepack enable && corepack prepare pnpm@latest --activate\`) and retry." >&2
+  exit 1
+fi
+echo "    pnpm:     ${PNPM_BIN}"
 
 NODE_MAJOR="$(node -p 'process.versions.node.split(".")[0]')"
 if [ "$NODE_MAJOR" -lt 22 ]; then

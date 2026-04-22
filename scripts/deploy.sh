@@ -11,6 +11,10 @@
 #   ssh pi 'cd ~/repos/home-os && scripts/deploy.sh'
 set -euo pipefail
 
+# SSH non-interactive sessions don't source ~/.bashrc, so pnpm (installed via
+# corepack or ~/.local/share/pnpm) may not be on PATH. Add common locations.
+export PATH="$HOME/.npm-global/bin:$HOME/.local/share/pnpm:$HOME/.local/bin:/usr/local/bin:$PATH"
+
 REPO_DIR="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$REPO_DIR"
 
