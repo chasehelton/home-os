@@ -16,7 +16,9 @@
  *        - `HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS=1` is set, or
  *        - `--allow-destructive` is passed.
  *
- * Called by scripts/migrate-with-snapshot.sh and by the docker-compose
+ * Called by scripts/deploy.sh (production) and directly via
+ * `pnpm --filter=@home-os/db migrate:safe`. Dev/test paths use
+ * runMigrations() (no snapshot, no gate).
  * `migrate` one-shot service. In dev, `pnpm db:migrate` bypasses this gate
  * (see packages/db/src/migrate.ts) because the dev DB is disposable.
  */

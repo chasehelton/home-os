@@ -1,7 +1,8 @@
 /**
  * Static analysis of a migration's SQL for patterns that can cause irreversible
  * data loss. Used by the Phase 10 migration safety gate (see
- * scripts/migrate-with-snapshot.sh). A migration flagged as destructive must
+ * `pnpm --filter=@home-os/db migrate:safe`, invoked by scripts/deploy.sh).
+ * A migration flagged as destructive must
  * be re-run with `HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS=1` (or the `--allow`
  * flag on the CLI).
  *

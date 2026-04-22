@@ -291,7 +291,17 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 
 ### Phase 10 — Deployment & Hardening ✅
 
-- `infra/docker/Dockerfile.api` — multi-stage `node:22-bookworm-slim` (glibc, needed for native `better-sqlite3` on arm64), runs as uid 1000, `HOME_OS_AUTO_MIGRATE=false` by default. `infra/docker/Dockerfile.web` — Vite build + `caddy:2-alpine` with SPA fallback.
+> **Note (superseded):** The original Phase 10 targeted a Docker Compose stack (api + web + caddy + litestream + one-shot migrate) on the Pi, with CI building multi-arch images to GHCR. For a 2-user household deployment this was more moving parts than we needed. The stack was replaced with a native setup:
+>
+> - A single `home-os-api.service` systemd unit runs the Fastify API, which also serves the built web SPA via `@fastify/static` (SPA fallback for non-API routes).
+> - TLS + public URL via **Tailscale Serve** (`tailscale serve --https=443 http://127.0.0.1:4000`), which provisions a free tailnet cert — no Caddy.
+> - CD via `.github/workflows/deploy.yml`: waits for CI, joins the tailnet as an ephemeral node using a Tailscale OAuth client, SSHes to the Pi, and runs `scripts/deploy.sh` (pull → build → `migrate:safe` → restart → `/health/ready`).
+> - Bootstrap via `scripts/setup-pi.sh` (one-shot, idempotent) — installs the systemd unit, builds, migrates, and configures Tailscale Serve.
+> - Backups: `scripts/backup-snapshot.sh` (sqlite online `.backup` + recipes/images tarball) on a cron timer. No Litestream.
+>
+> The safety primitives below (destructive-migration scanner, snapshot-before-migrate, `HOME_OS_AUTO_MIGRATE=false` in prod, `HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS` override) are preserved and now invoked by `scripts/deploy.sh` via `pnpm --filter=@home-os/db migrate:safe`.
+
+Original Phase 10 artifacts (now deleted; kept here for archaeology):
 - `infra/docker/docker-compose.yml` — five services: `migrate` (one-shot, runs `pnpm --filter=@home-os/db migrate:safe`), `api`, `web`, `caddy` (edge, TLS), `litestream`. `api` depends_on `migrate` with `service_completed_successfully` so migrations are never silently auto-applied. Volume layout: `$DATA/db` shared only between `api` + `litestream` (ro for litestream); `$DATA/recipes`, `$DATA/images`, `$DATA/backups` mounted only into `api`. All containers logged via json-file with `max-size=10m, max-file=5` to cap SD-card churn.
 - `infra/caddy/Caddyfile` — tailnet-facing reverse proxy: `/api/*`, `/auth/*`, `/health/*` → `api:4000`, everything else → `web:8080`. Uses `tls internal` by default; `infra/caddy/README-tailscale.md` documents swapping to Tailscale certs.
 - `infra/litestream/litestream.yml` — continuous WAL replication template (S3/B2).

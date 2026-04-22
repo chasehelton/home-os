@@ -9,6 +9,11 @@ const EnvSchema = z.object({
     .min(32)
     .default('dev-only-secret-change-me-change-me-change-me'),
   HOME_OS_DATA_DIR: z.string().optional(),
+  // When set, the API serves the built web SPA from this directory for any
+  // non-API request (with index.html fallback for client-side routing).
+  // Left unset in dev — Vite serves the SPA on :5173. In production the
+  // deploy script points this at apps/web/dist.
+  HOME_OS_WEB_STATIC_DIR: z.string().optional(),
   // Phase 10 — deployment.
   //   * In dev/test we auto-run pending migrations on startup (ergonomic).
   //   * In production the compose stack uses a one-shot `migrate` service

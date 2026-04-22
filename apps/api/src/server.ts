@@ -5,9 +5,9 @@ import { runMigrations } from '@home-os/db';
 const env = loadEnv();
 
 // Apply pending migrations on startup. In production set
-// HOME_OS_AUTO_MIGRATE=false and use the one-shot `migrate` compose service
-// (which runs scripts/migrate-with-snapshot.sh) so schema changes go through
-// the destructive-migration gate and a pre-migrate snapshot.
+// HOME_OS_AUTO_MIGRATE=false — scripts/deploy.sh runs the safe path
+// (`pnpm --filter=@home-os/db migrate:safe`) which takes a pre-migrate
+// snapshot and gates destructive SQL before restarting the service.
 if (env.HOME_OS_AUTO_MIGRATE) {
   try {
     runMigrations({ dataDir: env.HOME_OS_DATA_DIR });

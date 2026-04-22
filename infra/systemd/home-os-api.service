@@ -1,0 +1,53 @@
+# systemd unit: run the home-os API natively (no Docker).
+#
+# Install via scripts/setup-pi.sh (or manually):
+#
+#   sudo cp infra/systemd/home-os-api.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now home-os-api.service
+#
+# Runs as the invoking user; assumes the repo is checked out at their
+# $HOME/repos/home-os and `pnpm build` has been run (produces the compiled
+# JS under apps/api/dist and the SPA under apps/web/dist).
+#
+# Tailscale Serve exposes the local :4000 listener as a real HTTPS
+# endpoint on the tailnet hostname; no Caddy/nginx needed — the API
+# serves the web SPA itself via @fastify/static when
+# HOME_OS_WEB_STATIC_DIR is set.
+
+[Unit]
+Description=home-os api (Node + Fastify + static web SPA)
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+# Filled in by scripts/setup-pi.sh at install time.
+User=__HOME_OS_USER__
+WorkingDirectory=__HOME_OS_REPO__
+EnvironmentFile=__HOME_OS_REPO__/.env
+# The API listens on loopback only — Tailscale Serve provides tailnet TLS.
+Environment=HOME_OS_API_HOST=127.0.0.1
+Environment=HOME_OS_API_PORT=4000
+Environment=HOME_OS_WEB_STATIC_DIR=__HOME_OS_REPO__/apps/web/dist
+Environment=NODE_ENV=production
+# Production migration gate: we run migrate-safe.js from the deploy script,
+# so the server itself should NOT auto-migrate.
+Environment=HOME_OS_AUTO_MIGRATE=false
+ExecStart=/usr/bin/node __HOME_OS_REPO__/apps/api/dist/server.js
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=15
+# Journald captures stdout/stderr as structured logs (Fastify emits JSON).
+StandardOutput=journal
+StandardError=journal
+
+# Hardening — safe defaults for a user-scoped service.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=false
+PrivateTmp=true
+ReadWritePaths=__HOME_OS_DATA_DIR__
+
+[Install]
+WantedBy=multi-user.target

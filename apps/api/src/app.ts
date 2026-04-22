@@ -1,7 +1,10 @@
 import Fastify, { type FastifyInstance } from 'fastify';
+import fastifyStatic from '@fastify/static';
 import cors from '@fastify/cors';
 import cookie from '@fastify/cookie';
 import sensible from '@fastify/sensible';
+import { existsSync, statSync } from 'node:fs';
+import { resolve as resolvePath, join as joinPath } from 'node:path';
 import { openDb, type DB, ensureDataDirs, dataDir as resolveDataDir } from '@home-os/db';
 import type Database from 'better-sqlite3';
 import { loadEnv, type Env } from './env.js';
@@ -74,6 +77,36 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   await registerGithubRoutes(app);
   await registerReminderRoutes(app);
   await registerPushRoutes(app);
+
+  // Serve the built web SPA when HOME_OS_WEB_STATIC_DIR is set. API routes
+  // above take precedence; anything else falls back to index.html so
+  // client-side routing works.
+  if (env.HOME_OS_WEB_STATIC_DIR) {
+    const staticDir = resolvePath(env.HOME_OS_WEB_STATIC_DIR);
+    if (existsSync(staticDir) && statSync(staticDir).isDirectory()) {
+      await app.register(fastifyStatic, {
+        root: staticDir,
+        prefix: '/',
+        wildcard: false,
+        index: ['index.html'],
+      });
+      const indexHtml = joinPath(staticDir, 'index.html');
+      app.setNotFoundHandler((req, reply) => {
+        const url = req.raw.url ?? '/';
+        if (
+          url.startsWith('/api/') ||
+          url.startsWith('/auth/') ||
+          url.startsWith('/health/')
+        ) {
+          return reply.code(404).send({ error: 'not found' });
+        }
+        return reply.sendFile('index.html', staticDir);
+      });
+      app.log.info({ staticDir, indexHtml }, 'serving web SPA from static dir');
+    } else {
+      app.log.warn({ staticDir }, 'HOME_OS_WEB_STATIC_DIR does not exist — skipping SPA serving');
+    }
+  }
 
   const shouldStartWorkers = options.startWorkers ?? env.NODE_ENV !== 'test';
   let worker: CalendarWorker | null = null;

@@ -1,0 +1,67 @@
+name: deploy
+
+# Auto-deploy to the home Pi on every push to main (after CI passes).
+# Flow:
+#   1. Wait for `ci.yml` on the same SHA to complete successfully.
+#   2. Join the tailnet as an ephemeral node.
+#   3. SSH to the Pi and run scripts/deploy.sh (pulls, builds, migrates,
+#      restarts home-os-api.service).
+#
+# Required repo secrets:
+#   TAILSCALE_OAUTH_CLIENT_ID   — Tailscale OAuth client ID (scopes: devices:write)
+#   TAILSCALE_OAUTH_SECRET      — Tailscale OAuth client secret
+#   PI_SSH_PRIVATE_KEY          — ed25519 private key authorised on the Pi
+#   PI_HOST                     — tailnet hostname (e.g., pi4.tailebbd07.ts.net)
+#   PI_USER                     — Linux user on the Pi (owns the checkout)
+#
+# Optional:
+#   TAILSCALE_TAGS              — ACL tag for the runner (default: tag:ci)
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  wait-for-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for ci workflow
+        uses: lewagon/wait-on-check-action@v1.3.4
+        with:
+          ref: ${{ github.sha }}
+          check-name: build-test
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          wait-interval: 15
+          allowed-conclusions: success
+
+  deploy:
+    needs: wait-for-ci
+    runs-on: ubuntu-latest
+    steps:
+      - name: Tailscale up
+        uses: tailscale/github-action@v3
+        with:
+          oauth-client-id: ${{ secrets.TAILSCALE_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TAILSCALE_OAUTH_SECRET }}
+          tags: ${{ vars.TAILSCALE_TAGS || 'tag:ci' }}
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          echo "${{ secrets.PI_SSH_PRIVATE_KEY }}" > ~/.ssh/pi
+          chmod 600 ~/.ssh/pi
+          ssh-keyscan -T 10 -H "${{ secrets.PI_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
+
+      - name: Deploy
+        env:
+          PI_HOST: ${{ secrets.PI_HOST }}
+          PI_USER: ${{ secrets.PI_USER }}
+        run: |
+          ssh -i ~/.ssh/pi -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
+            'cd ~/repos/home-os && scripts/deploy.sh'
