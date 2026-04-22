@@ -4,6 +4,7 @@ import { Recipes } from './components/Recipes';
 import { MealPlan } from './components/MealPlan';
 import { Settings } from './components/Settings';
 import { Calendar } from './components/Calendar';
+import { Assistant } from './components/Assistant';
 
 interface Me {
   id: string;
@@ -12,7 +13,7 @@ interface Me {
   pictureUrl: string | null;
 }
 
-type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'settings';
+type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'assistant' | 'settings';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -20,7 +21,13 @@ export function App() {
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab');
-    return t === 'recipes' || t === 'meals' || t === 'calendar' || t === 'settings' ? t : 'todos';
+    return t === 'recipes' ||
+      t === 'meals' ||
+      t === 'calendar' ||
+      t === 'assistant' ||
+      t === 'settings'
+      ? t
+      : 'todos';
   });
 
   useEffect(() => {
@@ -72,7 +79,7 @@ export function App() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">home-os</h1>
           <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(['todos', 'recipes', 'meals', 'calendar', 'settings'] as Tab[]).map((t) => (
+            {(['todos', 'recipes', 'meals', 'calendar', 'assistant', 'settings'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -111,6 +118,8 @@ export function App() {
         <MealPlan />
       ) : tab === 'calendar' ? (
         <Calendar currentUserId={me.id} />
+      ) : tab === 'assistant' ? (
+        <Assistant />
       ) : (
         <Settings />
       )}

@@ -1,71 +1,51 @@
-import { z } from 'zod';
+export * from './tools.js';
+export * from './provider.js';
+export { MockProvider } from './mock.js';
+export { OpenAIProvider, type OpenAIProviderOptions } from './openai.js';
 
-// ---------------------------------------------------------------------------
-// Provider-agnostic AI abstraction. Full impl lands in Phase 9 (plan.md).
-// The app must be fully functional with the `disabled` provider.
-// ---------------------------------------------------------------------------
+import { DisabledProvider, type AiProvider } from './provider.js';
+import { MockProvider } from './mock.js';
+import { OpenAIProvider } from './openai.js';
 
-export const ToolCall = z.discriminatedUnion('tool', [
-  z.object({
-    tool: z.literal('create_todo'),
-    args: z.object({
-      title: z.string(),
-      scope: z.enum(['household', 'user']).default('household'),
-      dueAt: z.string().datetime().nullable().optional(),
-      notes: z.string().nullable().optional(),
-    }),
-  }),
-  z.object({
-    tool: z.literal('create_event'),
-    args: z.object({
-      title: z.string(),
-      startAt: z.string().datetime(),
-      endAt: z.string().datetime(),
-      location: z.string().nullable().optional(),
-      description: z.string().nullable().optional(),
-    }),
-  }),
-  z.object({
-    tool: z.literal('import_recipe'),
-    args: z.object({ url: z.string().url() }),
-  }),
-  z.object({
-    tool: z.literal('plan_meals_week'),
-    args: z.object({
-      weekStart: z.string().date(),
-      preferences: z.string().nullable().optional(),
-    }),
-  }),
-]);
-export type ToolCall = z.infer<typeof ToolCall>;
-
-export interface AiContext {
-  userId: string;
-  now: Date;
+export interface CreateProviderOptions {
+  /** One of: 'disabled' | 'mock' | 'openai'. Empty/undefined = disabled. */
+  kind: string | undefined;
+  openai?: {
+    apiKey?: string;
+    model?: string;
+    baseUrl?: string;
+    fetchImpl?: typeof fetch;
+  };
 }
 
-export interface AiProvider {
-  readonly name: string;
-  readonly enabled: boolean;
-  parseIntent(prompt: string, ctx: AiContext): Promise<ToolCall[]>;
-}
-
-export class DisabledProvider implements AiProvider {
-  readonly name = 'disabled';
-  readonly enabled = false;
-  async parseIntent(): Promise<ToolCall[]> {
-    throw new Error('AI provider is disabled. Set HOME_OS_AI_PROVIDER to enable.');
-  }
-}
-
-export function createProvider(kind: string | undefined): AiProvider {
+export function createProvider(opts: CreateProviderOptions): AiProvider {
+  const kind = (opts.kind ?? '').toLowerCase();
   switch (kind) {
-    case undefined:
     case '':
     case 'disabled':
       return new DisabledProvider();
-    // copilot / openai / anthropic adapters land in Phase 9.
-    default:
+    case 'mock':
+      return new MockProvider();
+    case 'openai': {
+      const key = opts.openai?.apiKey;
+      if (!key) {
+        // No key — degrade to disabled rather than throwing at boot so the
+        // rest of the app still works. The /api/ai/parse route will return
+        // an ai_disabled error until a key is configured.
+        return new DisabledProvider();
+      }
+      return new OpenAIProvider({
+        apiKey: key,
+        model: opts.openai?.model,
+        baseUrl: opts.openai?.baseUrl,
+        fetchImpl: opts.openai?.fetchImpl,
+      });
+    }
+    case 'copilot':
+    case 'anthropic':
+      // Adapter stubs — land in a follow-up per plan.md §P9.
       throw new Error(`AI provider "${kind}" is not yet implemented.`);
+    default:
+      throw new Error(`Unknown AI provider "${kind}".`);
   }
 }

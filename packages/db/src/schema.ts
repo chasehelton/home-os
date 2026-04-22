@@ -247,3 +247,32 @@ export const calendarEvents = sqliteTable(
     byMutation: index('calendar_events_mutation_idx').on(t.mutationId),
   })
 );
+
+// ---------------------------------------------------------------------------
+// Phase 9 — AI assistant transcripts.
+//
+// One row per AI interaction (parse or execute). Stored for debugging and
+// for the "recent prompts" history panel. `toolCallsJson` is the JSON-encoded
+// ToolCall[] returned by the provider; `outcomeJson` is a per-call array of
+// {ok, entityId?, error?} recorded at execute time (null for parse-only rows).
+// ---------------------------------------------------------------------------
+
+export const aiTranscripts = sqliteTable(
+  'ai_transcripts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    prompt: text('prompt').notNull(),
+    toolCallsJson: text('tool_calls_json').notNull(),
+    outcomeJson: text('outcome_json'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    byUserCreated: index('ai_transcripts_user_created_idx').on(t.userId, t.createdAt),
+  })
+);

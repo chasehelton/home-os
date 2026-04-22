@@ -21,6 +21,10 @@ const EnvSchema = z.object({
   HOME_OS_ALLOWED_EMAILS: z.string().default(''),
 
   HOME_OS_AI_PROVIDER: z.string().default('disabled'),
+  // Phase 9 — OpenAI adapter. All optional; only used when AI_PROVIDER=openai.
+  HOME_OS_OPENAI_API_KEY: z.string().optional(),
+  HOME_OS_OPENAI_MODEL: z.string().default('gpt-4o-mini'),
+  HOME_OS_OPENAI_BASE_URL: z.string().url().default('https://api.openai.com'),
   // Phase 5: 32-byte key (hex or base64) used to encrypt Google refresh
   // tokens at rest. REQUIRED in production; derived from the session secret
   // in dev/test for ergonomics.

@@ -6,7 +6,7 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ## 🚦 Current Status
 
-**Up next: Phase 9 — AI assistant.** Branch `main`; create `phase-9-ai` after P8 PR merge.
+**Up next: Phase 10 — Deployment & hardening.** Branch `main`; create `phase-10-deploy` after P9 PR merge.
 
 | Phase | Status | PR |
 | --- | --- | --- |
@@ -18,12 +18,12 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 | P5 Calendar READ | ✅ merged | #6 |
 | P6 Calendar UI | ✅ merged | #7 |
 | P7 Calendar WRITE | ✅ merged | #8 |
-| P8 Kiosk shell | ✅ PR open | — |
-| **P9 AI assistant** | ⏳ **next** | — |
-| P10 Deploy & hardening | pending | — |
+| P8 Kiosk shell | ✅ merged | #9 |
+| P9 AI assistant | ✅ PR open | — |
+| **P10 Deploy & hardening** | ⏳ **next** | — |
 | P11 Reminders | pending | — |
 
-**Repo health:** 108/108 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 120/120 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
@@ -257,16 +257,14 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Crash recovery UI (if api is down, show diagnostic + offline cached data).
 - No-keyboard auth-recovery flow (QR code to mobile to re-auth).
 
-### Phase 9 — AI assistant
-- `packages/ai`: stable interface `parseIntent(prompt, ctx) → ToolCall[]`.
-- Tool/function schemas mirror REST endpoints (create_event, create_todo, plan_meals_week, import_recipe).
-- **Confirm-before-execute** flow: preview actions, user taps confirm.
-- Transcript log for debugging.
-- Provider adapters (in priority order):
-  1. Try GitHub Copilot SDK adapter (if/where policy allows it as an application AI provider).
-  2. Direct OpenAI / Anthropic adapter (fallback).
-  3. Optional local (Ollama on a beefier machine; Pi 4 cannot run useful LLMs).
-- App fully works with AI disabled.
+### Phase 9 — AI assistant ✅
+- `packages/ai`: stable `parseIntent(prompt, ctx) → ToolCall[]` interface with tool-schema source of truth (zod + JSON-schema for function calling). Providers: `DisabledProvider` (default), `MockProvider` (deterministic rules for dev/tests), `OpenAIProvider` (fetch-based, no SDK dep, injectable `fetchImpl`). Copilot-SDK + Anthropic adapters intentionally stubbed; throw "not yet implemented" until a follow-up lands them.
+- Tools shipped this phase: `create_todo`, `create_event`, `import_recipe`. `plan_meals_week` deferred (schema intentionally omitted from the active `ToolCall` union).
+- REST: `GET /api/ai/status`, `POST /api/ai/parse` (preview, never mutates), `POST /api/ai/execute` (re-validates each ToolCall + dispatches via `apps/api/src/ai/execute.ts` which reuses todos/calendar/recipes domain code and existing scope/ownership enforcement). `GET /api/ai/transcripts` for recent history. Per-user token-bucket rate limit (8/min, scoped to the Fastify instance).
+- New `ai_transcripts` table (migration `0006_burly_the_executioner.sql`) stores prompt + toolCallsJson + outcomeJson per interaction.
+- Env: `HOME_OS_AI_PROVIDER` (`disabled`/`mock`/`openai`), `HOME_OS_OPENAI_API_KEY`, `HOME_OS_OPENAI_MODEL` (default `gpt-4o-mini`), `HOME_OS_OPENAI_BASE_URL`. Missing key degrades to disabled rather than crashing at boot — app is fully functional with AI disabled.
+- Web: new **Assistant** tab with a preview → confirm → execute flow, editable proposal cards, outcome list, and recent-transcripts panel.
+- 14 new tests (MockProvider, OpenAIProvider with stubbed fetch, createProvider matrix) + 9 new API integration tests (disabled/mock flows, validation, rate limit, transcript scoping, calendar dispatch with and without a writable primary).
 
 ### Phase 10 — Deployment & Hardening
 - `infra/docker`: multi-stage Dockerfiles; `linux/arm64` images built in CI.
