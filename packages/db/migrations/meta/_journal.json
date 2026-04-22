@@ -57,6 +57,13 @@
       "when": 1776862638663,
       "tag": "0007_curious_dakota_north",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1776871989807,
+      "tag": "0008_majestic_dracula",
+      "breakpoints": true
     }
   ]
 }

@@ -5,6 +5,10 @@ import { schema } from '@home-os/db';
 import type { ToolCall } from '@home-os/ai';
 import { createTodo, ScopeError } from '../todos/repo.js';
 import {
+  createReminder,
+  ScopeError as ReminderScopeError,
+} from '../reminders/repo.js';
+import {
   WriteError,
   createLocalEvent,
   pushPendingForAccount,
@@ -40,7 +44,7 @@ export interface ExecuteContext {
 export interface ToolOutcome {
   ok: boolean;
   entityId?: string;
-  entityType?: 'todo' | 'calendar_event' | 'recipe';
+  entityType?: 'todo' | 'calendar_event' | 'recipe' | 'reminder';
   error?: string;
 }
 
@@ -52,6 +56,8 @@ export async function executeToolCall(ctx: ExecuteContext, call: ToolCall): Prom
       return execCreateEvent(ctx, call.args);
     case 'import_recipe':
       return execImportRecipe(ctx, call.args);
+    case 'create_reminder':
+      return execCreateReminder(ctx, call.args);
     default:
       return { ok: false, error: 'unknown_tool' };
   }
@@ -78,6 +84,33 @@ function execCreateTodo(
     return { ok: true, entityId: row.id, entityType: 'todo' };
   } catch (err) {
     if (err instanceof ScopeError) {
+      return { ok: false, error: err.message };
+    }
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
+function execCreateReminder(
+  ctx: ExecuteContext,
+  args: Extract<ToolCall, { tool: 'create_reminder' }>['args'],
+): ToolOutcome {
+  try {
+    const row = createReminder(ctx.db, ctx.userId, {
+      scope: args.scope,
+      title: args.title,
+      fireAt: args.fireAt,
+      body: args.body ?? null,
+    });
+    logAudit(ctx.db, {
+      actorUserId: ctx.userId,
+      action: 'ai.create_reminder',
+      entity: 'reminder',
+      entityId: row.id,
+      after: row,
+    });
+    return { ok: true, entityId: row.id, entityType: 'reminder' };
+  } catch (err) {
+    if (err instanceof ReminderScopeError) {
       return { ok: false, error: err.message };
     }
     return { ok: false, error: (err as Error).message };

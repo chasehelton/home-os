@@ -315,3 +315,75 @@ export const aiTranscripts = sqliteTable(
     byUserCreated: index('ai_transcripts_user_created_idx').on(t.userId, t.createdAt),
   }),
 );
+
+// ---------------------------------------------------------------------------
+// Phase 11 — Reminders & notifications.
+//
+// A `reminder` is a scheduled household or per-user notification. The
+// background worker atomically claims rows whose `fire_at` has passed
+// (UPDATE…RETURNING), transitions them to `fired`, then best-effort
+// dispatches Web Push to subscribed devices. Banner polling on the web/
+// kiosk is the reliable delivery channel; push is lossy under crashes
+// by design.
+// ---------------------------------------------------------------------------
+
+export const reminders = sqliteTable(
+  'reminders',
+  {
+    id: text('id').primaryKey(),
+    scope: text('scope', { enum: ['household', 'user'] }).notNull(),
+    ownerUserId: text('owner_user_id').references(() => users.id, { onDelete: 'set null' }),
+    title: text('title').notNull(),
+    body: text('body'),
+    fireAt: text('fire_at').notNull(),
+    status: text('status', { enum: ['pending', 'fired', 'dismissed', 'cancelled'] })
+      .notNull()
+      .default('pending'),
+    entityType: text('entity_type', { enum: ['todo', 'calendar_event', 'custom'] }),
+    entityId: text('entity_id'),
+    firedAt: text('fired_at'),
+    dismissedAt: text('dismissed_at'),
+    createdBy: text('created_by')
+      .notNull()
+      .references(() => users.id),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    // Worker scan: pending reminders ordered by fire_at.
+    byStatusFire: index('reminders_status_fire_idx').on(t.status, t.fireAt),
+    // Visibility queries (active + list).
+    byOwnerStatus: index('reminders_owner_status_idx').on(t.ownerUserId, t.status),
+    byScopeStatus: index('reminders_scope_status_idx').on(t.scope, t.status),
+  }),
+);
+
+// Web Push subscription. Endpoint is unique across the whole table so a
+// device that re-subscribes under a new user is transparently reassigned
+// (on conflict → update). This prevents subscriptions from surviving a
+// user-switch on a shared device.
+export const pushSubscriptions = sqliteTable(
+  'push_subscriptions',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    endpoint: text('endpoint').notNull(),
+    p256dh: text('p256dh').notNull(),
+    auth: text('auth').notNull(),
+    userAgent: text('user_agent'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    lastUsedAt: text('last_used_at'),
+  },
+  (t) => ({
+    byEndpoint: uniqueIndex('push_subscriptions_endpoint_idx').on(t.endpoint),
+    byUser: index('push_subscriptions_user_idx').on(t.userId),
+  }),
+);

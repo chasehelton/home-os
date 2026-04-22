@@ -41,10 +41,21 @@ export const ImportRecipeArgs = z
   .strict();
 export type ImportRecipeArgs = z.infer<typeof ImportRecipeArgs>;
 
+export const CreateReminderArgs = z
+  .object({
+    title: z.string().min(1).max(500),
+    scope: z.enum(['household', 'user']).default('user'),
+    fireAt: z.string().datetime({ offset: true }),
+    body: z.string().max(4_000).nullable().optional(),
+  })
+  .strict();
+export type CreateReminderArgs = z.infer<typeof CreateReminderArgs>;
+
 export const ToolCall = z.discriminatedUnion('tool', [
   z.object({ tool: z.literal('create_todo'), args: CreateTodoArgs }),
   z.object({ tool: z.literal('create_event'), args: CreateEventArgs }),
   z.object({ tool: z.literal('import_recipe'), args: ImportRecipeArgs }),
+  z.object({ tool: z.literal('create_reminder'), args: CreateReminderArgs }),
 ]);
 export type ToolCall = z.infer<typeof ToolCall>;
 
@@ -115,6 +126,25 @@ export const OPENAI_TOOLS: OpenAIToolDef[] = [
         required: ['url'],
         properties: {
           url: { type: 'string', format: 'uri' },
+        },
+      },
+    },
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_reminder',
+      description:
+        'Schedule a reminder to fire at fireAt. scope=user (default) targets the calling user; scope=household targets everyone. fireAt must be a full ISO-8601 timestamp with offset.',
+      parameters: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['title', 'fireAt'],
+        properties: {
+          title: { type: 'string', minLength: 1, maxLength: 500 },
+          scope: { type: 'string', enum: ['household', 'user'], default: 'user' },
+          fireAt: { type: 'string', description: 'ISO-8601 with offset.' },
+          body: { type: ['string', 'null'], maxLength: 4000 },
         },
       },
     },

@@ -61,6 +61,17 @@ const EnvSchema = z.object({
     .int()
     .positive()
     .default(5 * 60 * 1000),
+
+  // Phase 11 — Reminders & Web Push.
+  //   * VAPID keys are optional; if unset, push is disabled (vapid-public-key
+  //     endpoint 503s) and the banner-polling path still works.
+  //   * SUBJECT must be a mailto: or https: URL identifying the app owner
+  //     (RFC 8292). In dev we default to a mailto: placeholder.
+  //   * TICK_MS controls the reminder worker's polling cadence.
+  HOME_OS_VAPID_PUBLIC_KEY: z.string().optional(),
+  HOME_OS_VAPID_PRIVATE_KEY: z.string().optional(),
+  HOME_OS_VAPID_SUBJECT: z.string().default('mailto:home-os@localhost'),
+  HOME_OS_REMINDER_TICK_MS: z.coerce.number().int().positive().default(20_000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 
