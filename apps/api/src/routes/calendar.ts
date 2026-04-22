@@ -1,9 +1,13 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as client from 'openid-client';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import { ListCalendarEventsQuery } from '@home-os/shared';
+import {
+  CalendarEventCreate,
+  CalendarEventUpdate,
+  ListCalendarEventsQuery,
+} from '@home-os/shared';
 import { schema } from '@home-os/db';
 import { requireUser } from '../auth/middleware.js';
 import { logAudit } from '../auth/audit.js';
@@ -17,6 +21,14 @@ import {
   type AccountRow,
   type SyncConfig,
 } from '../calendar/sync.js';
+import {
+  WriteError,
+  createLocalEvent,
+  deleteLocalEvent,
+  pushPendingForAccount,
+  resolveWriteContext,
+  updateLocalEvent,
+} from '../calendar/write.js';
 
 const STATE_COOKIE = 'oidc-cal';
 const STATE_TTL_S = 10 * 60;
@@ -28,6 +40,17 @@ const StateBlob = z.object({
 });
 
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
+const CAL_WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
+
+/** True if the stored OAuth `scopes` string grants write access. */
+export function hasWriteScope(scopes: string | null | undefined): boolean {
+  if (!scopes) return false;
+  const tokens = scopes.split(/\s+/);
+  return (
+    tokens.includes(CAL_WRITE_SCOPE) ||
+    tokens.includes('https://www.googleapis.com/auth/calendar')
+  );
+}
 
 function isProd(env: { NODE_ENV: string }): boolean {
   return env.NODE_ENV === 'production';
@@ -40,6 +63,7 @@ function summarizeAccount(a: AccountRow & { calendars: unknown[] }) {
     email: a.email,
     status: a.status,
     lastError: a.lastError,
+    canWrite: hasWriteScope(a.scopes),
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
     calendars: (a.calendars as Array<{
@@ -119,7 +143,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
 
     const url = client.buildAuthorizationUrl(cfg, {
       redirect_uri: redirectUri,
-      scope: `openid email profile ${CAL_SCOPE}`,
+      scope: `openid email profile ${CAL_SCOPE} ${CAL_WRITE_SCOPE}`,
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       state,
@@ -352,6 +376,199 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     const rows = listEventsForUserBetween(db, req.user!.id, from, to);
     return reply.send({ from, to, scope, events: rows });
   });
+
+  // --- Phase 7: Write routes ---------------------------------------------
+
+  type Reply = FastifyReply;
+
+  function mapWriteError(err: WriteError, reply: Reply) {
+    switch (err.code) {
+      case 'not_found':
+        return reply.code(404).send({ error: 'not_found' });
+      case 'recurring_edit_unsupported':
+        return reply.code(409).send({ error: 'recurring_edit_unsupported' });
+      case 'not_primary_calendar':
+        return reply.code(403).send({ error: 'not_primary_calendar' });
+      case 'invalid_times':
+        return reply.code(400).send({ error: 'invalid_times', message: err.message });
+      case 'write_scope_missing':
+        return reply.code(403).send({ error: 'write_scope_missing' });
+      case 'conflict':
+        return reply.code(409).send({ error: 'conflict' });
+    }
+  }
+
+  function requireWriteScope(account: AccountRow, reply: Reply) {
+    if (!hasWriteScope(account.scopes)) {
+      reply.code(403).send({ error: 'write_scope_missing' });
+      return false;
+    }
+    return true;
+  }
+
+  async function pushInline(accountId: string) {
+    const acc = db
+      .select()
+      .from(schema.calendarAccounts)
+      .where(eq(schema.calendarAccounts.id, accountId))
+      .get() as AccountRow | undefined;
+    if (!acc) return;
+    await withAccountLock(acc.id, () => pushPendingForAccount(db, acc, syncCfg));
+  }
+
+  app.post('/api/calendar/events', { preHandler: auth }, async (req, reply) => {
+    const parsed = CalendarEventCreate.safeParse(req.body);
+    if (!parsed.success) {
+      return reply.code(400).send({ error: 'invalid_body', details: parsed.error.format() });
+    }
+    let accountId: string;
+    try {
+      const ctx = resolveWriteContext(db, req.user!.id, parsed.data.calendarListId);
+      if (!requireWriteScope(ctx.account, reply)) return;
+      accountId = ctx.account.id;
+    } catch (err) {
+      if (err instanceof WriteError) return mapWriteError(err, reply);
+      throw err;
+    }
+    let row;
+    try {
+      row = createLocalEvent(db, req.user!.id, parsed.data);
+    } catch (err) {
+      if (err instanceof WriteError) return mapWriteError(err, reply);
+      throw err;
+    }
+    try {
+      await pushInline(accountId);
+    } catch (err) {
+      req.log.warn({ err }, 'calendar push after create failed');
+    }
+    const fresh = db
+      .select()
+      .from(schema.calendarEvents)
+      .where(eq(schema.calendarEvents.id, row.id))
+      .get();
+    return reply.code(201).send({ event: fresh });
+  });
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/calendar/events/:id',
+    { preHandler: auth },
+    async (req, reply) => {
+      const parsed = CalendarEventUpdate.safeParse(req.body);
+      if (!parsed.success) {
+        return reply.code(400).send({ error: 'invalid_body', details: parsed.error.format() });
+      }
+      // Scope check up front: look up the event's account.
+      const existing = db
+        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .from(schema.calendarEvents)
+        .innerJoin(
+          schema.calendarLists,
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+        )
+        .innerJoin(
+          schema.calendarAccounts,
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+        )
+        .where(eq(schema.calendarEvents.id, req.params.id))
+        .get();
+      if (!existing || existing.account.userId !== req.user!.id) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+      if (!requireWriteScope(existing.account as AccountRow, reply)) return;
+      let row;
+      try {
+        row = updateLocalEvent(db, req.user!.id, req.params.id, parsed.data);
+      } catch (err) {
+        if (err instanceof WriteError) return mapWriteError(err, reply);
+        throw err;
+      }
+      try {
+        await pushInline(existing.account.id);
+      } catch (err) {
+        req.log.warn({ err }, 'calendar push after update failed');
+      }
+      const fresh = db
+        .select()
+        .from(schema.calendarEvents)
+        .where(eq(schema.calendarEvents.id, row.id))
+        .get();
+      if (fresh?.conflictPayload) {
+        return reply.code(409).send({ error: 'conflict', event: fresh });
+      }
+      return reply.send({ event: fresh });
+    }
+  );
+
+  app.delete<{ Params: { id: string } }>(
+    '/api/calendar/events/:id',
+    { preHandler: auth },
+    async (req, reply) => {
+      const existing = db
+        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .from(schema.calendarEvents)
+        .innerJoin(
+          schema.calendarLists,
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+        )
+        .innerJoin(
+          schema.calendarAccounts,
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+        )
+        .where(eq(schema.calendarEvents.id, req.params.id))
+        .get();
+      if (!existing || existing.account.userId !== req.user!.id) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+      if (!requireWriteScope(existing.account as AccountRow, reply)) return;
+      try {
+        deleteLocalEvent(db, req.user!.id, req.params.id);
+      } catch (err) {
+        if (err instanceof WriteError) return mapWriteError(err, reply);
+        throw err;
+      }
+      try {
+        await pushInline(existing.account.id);
+      } catch (err) {
+        req.log.warn({ err }, 'calendar push after delete failed');
+      }
+      return reply.code(204).send();
+    }
+  );
+
+  app.post<{ Params: { id: string } }>(
+    '/api/calendar/events/:id/discard-conflict',
+    { preHandler: auth },
+    async (req, reply) => {
+      const existing = db
+        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .from(schema.calendarEvents)
+        .innerJoin(
+          schema.calendarLists,
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+        )
+        .innerJoin(
+          schema.calendarAccounts,
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+        )
+        .where(eq(schema.calendarEvents.id, req.params.id))
+        .get();
+      if (!existing || existing.account.userId !== req.user!.id) {
+        return reply.code(404).send({ error: 'not_found' });
+      }
+      db.update(schema.calendarEvents)
+        .set({ conflictPayload: null, lastPushError: null, updatedAt: new Date().toISOString() })
+        .where(eq(schema.calendarEvents.id, req.params.id))
+        .run();
+      logAudit(db, {
+        actorUserId: req.user!.id,
+        action: 'calendar.event.conflict.discarded',
+        entity: 'calendar_event',
+        entityId: req.params.id,
+      });
+      return reply.code(204).send();
+    }
+  );
 }
 
 declare module 'fastify' {
