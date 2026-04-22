@@ -214,6 +214,21 @@ export const calendarEvents = sqliteTable(
     recurringEventId: text('recurring_event_id'),
     originalStartTime: text('original_start_time'),
     googleUpdatedAt: text('google_updated_at'),
+    // Phase 7 — local-first WRITE queue. A row is "dirty" when it holds an
+    // unpushed local mutation; `pendingOp` describes the intended mutation.
+    // A dirty row with pending_op='delete' is a tombstone: hidden from reads,
+    // retained until we push the DELETE (or Google confirms it's gone).
+    // `mutationId` is a stable client-generated nonce stored in the Google
+    // event's extendedProperties.private so retries + sync can reconcile
+    // without creating duplicates.
+    localDirty: integer('local_dirty', { mode: 'boolean' }).notNull().default(false),
+    pendingOp: text('pending_op', { enum: ['create', 'update', 'delete'] }),
+    mutationId: text('mutation_id'),
+    lastPushError: text('last_push_error'),
+    lastPushAttemptAt: text('last_push_attempt_at'),
+    // Remote changed underneath us between our base etag and our write.
+    // Non-null while a conflict is unresolved; JSON of the local attempt.
+    conflictPayload: text('conflict_payload'),
     createdAt: text('created_at')
       .notNull()
       .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
@@ -228,5 +243,7 @@ export const calendarEvents = sqliteTable(
     ),
     byListStart: index('calendar_events_list_start_idx').on(t.calendarListId, t.startAt),
     byListDate: index('calendar_events_list_date_idx').on(t.calendarListId, t.startDate),
+    byDirty: index('calendar_events_dirty_idx').on(t.localDirty),
+    byMutation: index('calendar_events_mutation_idx').on(t.mutationId),
   })
 );

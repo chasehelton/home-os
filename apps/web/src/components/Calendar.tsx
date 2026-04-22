@@ -6,18 +6,36 @@ import { useEffect, useMemo, useState } from 'react';
 
 interface EventRow {
   id: string;
+  calendarListId: string;
+  googleEventId?: string;
   status: 'confirmed' | 'tentative' | 'cancelled';
   allDay: boolean;
   startAt: string | null;
   endAt: string | null;
   startDate: string | null;
   endDateExclusive: string | null;
+  startTz: string | null;
+  endTz: string | null;
   title: string | null;
+  description: string | null;
   location: string | null;
   htmlLink: string | null;
+  recurringEventId: string | null;
   ownerUserId?: string;
   ownerDisplayName?: string;
   ownerColor?: string | null;
+  // Phase 7 write-queue state.
+  localDirty?: boolean;
+  pendingOp?: 'create' | 'update' | 'delete' | null;
+  hasConflict?: boolean;
+  lastPushError?: string | null;
+}
+
+interface PrimaryCalendar {
+  accountId: string;
+  calendarListId: string;
+  canWrite: boolean;
+  email: string;
 }
 
 interface HouseholdMember {
@@ -29,6 +47,11 @@ interface HouseholdMember {
 
 type ViewMode = 'agenda' | 'week' | 'day';
 type Scope = 'self' | 'household';
+
+type EditorState =
+  | null
+  | { mode: 'create'; anchorDate: Date }
+  | { mode: 'edit'; event: EventRow };
 
 interface CalendarProps {
   currentUserId: string;
@@ -157,6 +180,9 @@ export function Calendar({ currentUserId }: CalendarProps) {
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [primary, setPrimary] = useState<PrimaryCalendar | null>(null);
+  const [editor, setEditor] = useState<EditorState>(null);
+  const [reloadTick, setReloadTick] = useState(0);
 
   useEffect(() => {
     writeUrlState(view, anchor, scope);
@@ -166,6 +192,32 @@ export function Calendar({ currentUserId }: CalendarProps) {
     void fetch('/api/household/members', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : { members: [] }))
       .then((b: { members: HouseholdMember[] }) => setMembers(b.members));
+  }, []);
+
+  // Load the current user's primary calendar once. This powers both the
+  // "New event" button (needs calendarListId) and the reconnect banner.
+  useEffect(() => {
+    void fetch('/api/calendar/accounts', { credentials: 'include' })
+      .then((r) => (r.ok ? r.json() : { accounts: [] }))
+      .then((b: {
+        accounts: Array<{
+          id: string;
+          email: string;
+          canWrite: boolean;
+          calendars: Array<{ id: string; primary: boolean }>;
+        }>;
+      }) => {
+        const mine = b.accounts[0];
+        if (!mine) return setPrimary(null);
+        const p = mine.calendars.find((c) => c.primary);
+        if (!p) return setPrimary(null);
+        setPrimary({
+          accountId: mine.id,
+          calendarListId: p.id,
+          canWrite: mine.canWrite,
+          email: mine.email,
+        });
+      });
   }, []);
 
   useEffect(() => {
@@ -194,7 +246,7 @@ export function Calendar({ currentUserId }: CalendarProps) {
     return () => {
       alive = false;
     };
-  }, [view, anchor, scope]);
+  }, [view, anchor, scope, reloadTick]);
 
   // Filter out events owned by hidden users (only applies when scope=household).
   const visible = useMemo(
@@ -272,7 +324,24 @@ export function Calendar({ currentUserId }: CalendarProps) {
             </button>
           ))}
         </nav>
+        {primary?.canWrite && (
+          <button
+            onClick={() => setEditor({ mode: 'create', anchorDate: anchor })}
+            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-500"
+          >
+            + New event
+          </button>
+        )}
       </header>
+
+      {primary && !primary.canWrite && (
+        <div className="border-b border-amber-900 bg-amber-900/30 px-4 py-2 text-sm text-amber-100">
+          Reconnect Google to enable creating & editing events.{' '}
+          <a className="underline" href="/auth/google/calendar/connect">
+            Reconnect
+          </a>
+        </div>
+      )}
 
       {scope === 'household' && members.length > 0 && (
         <div className="flex flex-wrap gap-2 border-b border-slate-800 px-4 py-2 text-xs">
@@ -309,13 +378,48 @@ export function Calendar({ currentUserId }: CalendarProps) {
         {loading ? (
           <div className="p-4 text-slate-400">Loading…</div>
         ) : view === 'agenda' ? (
-          <AgendaView events={visible} members={members} scope={scope} anchor={anchor} />
+          <AgendaView
+            events={visible}
+            members={members}
+            scope={scope}
+            anchor={anchor}
+            currentUserId={currentUserId}
+            onOpenEvent={(e) => setEditor({ mode: 'edit', event: e })}
+          />
         ) : view === 'week' ? (
-          <WeekView events={visible} members={members} scope={scope} anchor={anchor} days={7} />
+          <WeekView
+            events={visible}
+            members={members}
+            scope={scope}
+            anchor={anchor}
+            days={7}
+            currentUserId={currentUserId}
+            onOpenEvent={(e) => setEditor({ mode: 'edit', event: e })}
+          />
         ) : (
-          <WeekView events={visible} members={members} scope={scope} anchor={anchor} days={1} />
+          <WeekView
+            events={visible}
+            members={members}
+            scope={scope}
+            anchor={anchor}
+            days={1}
+            currentUserId={currentUserId}
+            onOpenEvent={(e) => setEditor({ mode: 'edit', event: e })}
+          />
         )}
       </div>
+
+      {editor && primary?.canWrite && (
+        <EventEditor
+          state={editor}
+          primary={primary}
+          onClose={() => setEditor(null)}
+          onSaved={() => {
+            setEditor(null);
+            setReloadTick((n) => n + 1);
+          }}
+        />
+      )}
     </section>
   );
 }
@@ -329,11 +433,15 @@ function AgendaView({
   members,
   scope,
   anchor,
+  currentUserId,
+  onOpenEvent,
 }: {
   events: EventRow[];
   members: HouseholdMember[];
   scope: Scope;
   anchor: Date;
+  currentUserId: string;
+  onOpenEvent: (e: EventRow) => void;
 }) {
   // Expand each event into (date, chip) pairs so all-day spans show up on
   // each day they cover.
@@ -388,14 +496,22 @@ function AgendaView({
             <ul className="flex flex-col">
               {items.map(({ event, label }, i) => {
                 const color = colorFor(event.ownerUserId, members);
+                const editable = isEditable(event, currentUserId);
                 return (
                   <li
                     key={`${event.id}-${i}`}
-                    className="flex items-center gap-3 border-l-4 px-4 py-2 hover:bg-slate-800/40"
+                    className={`flex items-center gap-3 border-l-4 px-4 py-2 hover:bg-slate-800/40 ${
+                      editable ? 'cursor-pointer' : ''
+                    } ${event.hasConflict ? 'bg-red-950/40' : ''}`}
                     style={{ borderLeftColor: color }}
+                    onClick={() => {
+                      if (editable) onOpenEvent(event);
+                      else if (event.htmlLink) window.open(event.htmlLink, '_blank', 'noopener');
+                    }}
                   >
                     <span className="w-36 shrink-0 text-xs text-slate-400">{label}</span>
                     <span className="flex-1 text-sm">{event.title || '(no title)'}</span>
+                    <EventBadges event={event} />
                     {event.location && (
                       <span className="hidden max-w-[20ch] truncate text-xs text-slate-400 sm:inline">
                         {event.location}
@@ -430,12 +546,16 @@ function WeekView({
   scope,
   anchor,
   days,
+  currentUserId,
+  onOpenEvent,
 }: {
   events: EventRow[];
   members: HouseholdMember[];
   scope: Scope;
   anchor: Date;
   days: number;
+  currentUserId: string;
+  onOpenEvent: (e: EventRow) => void;
 }) {
   const start = days === 7 ? startOfWeek(anchor) : anchor;
   const dayDates = Array.from({ length: days }, (_, i) => addDays(start, i));
@@ -505,7 +625,15 @@ function WeekView({
           return (
             <div key={toYmd(d)} className="flex min-h-[28px] flex-col gap-0.5 p-1">
               {items.map((e) => (
-                <EventChip key={`${e.id}-${toYmd(d)}`} event={e} members={members} scope={scope} compact />
+                <EventChip
+                  key={`${e.id}-${toYmd(d)}`}
+                  event={e}
+                  members={members}
+                  scope={scope}
+                  compact
+                  currentUserId={currentUserId}
+                  onOpenEvent={onOpenEvent}
+                />
               ))}
             </div>
           );
@@ -575,6 +703,8 @@ function WeekView({
                       event={e}
                       members={members}
                       scope={scope}
+                      currentUserId={currentUserId}
+                      onOpenEvent={onOpenEvent}
                       timeLabel={`${clippedLeft ? '…' : formatTime(s)} – ${
                         clippedRight ? '…' : formatTime(en)
                       }`}
@@ -614,30 +744,364 @@ function EventChip({
   scope,
   timeLabel,
   compact,
+  currentUserId,
+  onOpenEvent,
 }: {
   event: EventRow;
   members: HouseholdMember[];
   scope: Scope;
   timeLabel?: string;
   compact?: boolean;
+  currentUserId: string;
+  onOpenEvent: (e: EventRow) => void;
 }) {
   const color = colorFor(event.ownerUserId, members);
+  const editable = isEditable(event, currentUserId);
   return (
     <div
       className={`h-full overflow-hidden rounded border-l-4 ${
         compact ? 'px-1.5 py-0.5 text-[11px]' : 'p-1 text-xs'
-      } cursor-pointer bg-slate-800/70 hover:bg-slate-700`}
+      } cursor-pointer ${
+        event.hasConflict ? 'bg-red-900/60 ring-1 ring-red-500' : 'bg-slate-800/70'
+      } hover:bg-slate-700`}
       style={{ borderLeftColor: color }}
       title={event.title ?? ''}
       onClick={() => {
-        if (event.htmlLink) window.open(event.htmlLink, '_blank', 'noopener');
+        if (editable) onOpenEvent(event);
+        else if (event.htmlLink) window.open(event.htmlLink, '_blank', 'noopener');
       }}
     >
-      <div className="truncate font-medium text-slate-100">{event.title || '(no title)'}</div>
+      <div className="flex items-center gap-1">
+        <div className="flex-1 truncate font-medium text-slate-100">
+          {event.title || '(no title)'}
+        </div>
+        <EventBadges event={event} />
+      </div>
       {!compact && timeLabel && <div className="truncate text-[10px] text-slate-400">{timeLabel}</div>}
       {scope === 'household' && event.ownerDisplayName && (
         <div className="truncate text-[10px] text-slate-400">· {event.ownerDisplayName}</div>
       )}
+    </div>
+  );
+}
+
+// -------------------------------------------------------------------------
+// Phase 7 — write helpers, badges, and editor modal
+// -------------------------------------------------------------------------
+
+function isEditable(event: EventRow, currentUserId: string): boolean {
+  if (event.recurringEventId) return false;
+  if (event.ownerUserId && event.ownerUserId !== currentUserId) return false;
+  return true;
+}
+
+function EventBadges({ event }: { event: EventRow }) {
+  if (event.hasConflict) {
+    return (
+      <span
+        className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+        title={event.lastPushError ?? 'conflict with Google'}
+      >
+        conflict
+      </span>
+    );
+  }
+  if (event.localDirty) {
+    return (
+      <span
+        className="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-200"
+        title={`Pending ${event.pendingOp ?? 'sync'}${
+          event.lastPushError ? ` — ${event.lastPushError}` : ''
+        }`}
+      >
+        syncing
+      </span>
+    );
+  }
+  return null;
+}
+
+// Build a local-YYYY-MM-DDTHH:MM string for <input type="datetime-local">.
+function toLocalInput(d: Date): string {
+  const pad = (n: number) => n.toString().padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours()
+  )}:${pad(d.getMinutes())}`;
+}
+
+function fromLocalInput(s: string): Date {
+  // `new Date('YYYY-MM-DDTHH:MM')` in browsers parses as local time.
+  return new Date(s);
+}
+
+function addDaysYmd(ymd: string, days: number): string {
+  return toYmd(addDays(parseYmd(ymd), days));
+}
+
+function EventEditor({
+  state,
+  primary,
+  onClose,
+  onSaved,
+}: {
+  state: Exclude<EditorState, null>;
+  primary: PrimaryCalendar;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const existing = state.mode === 'edit' ? state.event : null;
+
+  const initialAllDay = existing ? existing.allDay : false;
+  const [allDay, setAllDay] = useState(initialAllDay);
+  const [title, setTitle] = useState(existing?.title ?? '');
+  const [description, setDescription] = useState(existing?.description ?? '');
+  const [location, setLocation] = useState(existing?.location ?? '');
+
+  // Seed start/end. For create mode, default to 9:00–10:00 on the anchor day.
+  const seedStart = existing?.startAt
+    ? new Date(existing.startAt)
+    : (() => {
+        const d = new Date(state.mode === 'create' ? state.anchorDate : new Date());
+        d.setHours(9, 0, 0, 0);
+        return d;
+      })();
+  const seedEnd = existing?.endAt
+    ? new Date(existing.endAt)
+    : new Date(seedStart.getTime() + 60 * 60 * 1000);
+
+  const [startLocal, setStartLocal] = useState(toLocalInput(seedStart));
+  const [endLocal, setEndLocal] = useState(toLocalInput(seedEnd));
+
+  const seedStartDate =
+    existing?.startDate ?? toYmd(state.mode === 'create' ? state.anchorDate : new Date());
+  const seedEndDate = existing?.endDateExclusive ?? addDaysYmd(seedStartDate, 1);
+  const [startDate, setStartDate] = useState(seedStartDate);
+  // Input holds *inclusive* end date; convert to exclusive on submit.
+  const [endDateInclusive, setEndDateInclusive] = useState(addDaysYmd(seedEndDate, -1));
+
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const body: Record<string, unknown> = {
+        title: title.trim(),
+        description: description.trim() || undefined,
+        location: location.trim() || undefined,
+        allDay,
+      };
+      if (allDay) {
+        body.startDate = startDate;
+        body.endDateExclusive = addDaysYmd(endDateInclusive, 1);
+      } else {
+        body.startAt = fromLocalInput(startLocal).toISOString();
+        body.endAt = fromLocalInput(endLocal).toISOString();
+      }
+      let url: string;
+      let method: string;
+      if (existing) {
+        url = `/api/calendar/events/${existing.id}`;
+        method = 'PATCH';
+      } else {
+        url = '/api/calendar/events';
+        method = 'POST';
+        body.calendarListId = primary.calendarListId;
+      }
+      const res = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `save failed (${res.status})`);
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'save failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function del() {
+    if (!existing) return;
+    if (!window.confirm('Delete this event?')) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/calendar/events/${existing.id}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok && res.status !== 204) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error || `delete failed (${res.status})`);
+      }
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'delete failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function discard() {
+    if (!existing) return;
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const res = await fetch(`/api/calendar/events/${existing.id}/discard-conflict`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error(`discard failed (${res.status})`);
+      onSaved();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : 'discard failed');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full max-w-md rounded-lg bg-slate-900 p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h2 className="mb-4 text-lg font-semibold text-slate-100">
+          {existing ? 'Edit event' : 'New event'}
+        </h2>
+
+        {existing?.hasConflict && (
+          <div className="mb-3 rounded border border-red-700 bg-red-950/60 p-2 text-xs text-red-200">
+            This event has a sync conflict with Google. Keep the server version and drop your
+            local changes?{' '}
+            <button
+              onClick={discard}
+              disabled={submitting}
+              className="ml-1 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
+            >
+              Discard my changes
+            </button>
+          </div>
+        )}
+
+        <div className="flex flex-col gap-3 text-sm">
+          <label className="flex flex-col gap-1">
+            <span className="text-slate-300">Title</span>
+            <input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100 outline-none ring-0 focus:ring-1 focus:ring-blue-500"
+              autoFocus
+            />
+          </label>
+          <label className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              checked={allDay}
+              onChange={(e) => setAllDay(e.target.checked)}
+            />
+            <span className="text-slate-300">All day</span>
+          </label>
+          {allDay ? (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-slate-300">Start date</span>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-slate-300">End date</span>
+                <input
+                  type="date"
+                  value={endDateInclusive}
+                  onChange={(e) => setEndDateInclusive(e.target.value)}
+                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+                />
+              </label>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="flex flex-col gap-1">
+                <span className="text-slate-300">Starts</span>
+                <input
+                  type="datetime-local"
+                  value={startLocal}
+                  onChange={(e) => setStartLocal(e.target.value)}
+                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+                />
+              </label>
+              <label className="flex flex-col gap-1">
+                <span className="text-slate-300">Ends</span>
+                <input
+                  type="datetime-local"
+                  value={endLocal}
+                  onChange={(e) => setEndLocal(e.target.value)}
+                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+                />
+              </label>
+            </div>
+          )}
+          <label className="flex flex-col gap-1">
+            <span className="text-slate-300">Location</span>
+            <input
+              value={location}
+              onChange={(e) => setLocation(e.target.value)}
+              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+            />
+          </label>
+          <label className="flex flex-col gap-1">
+            <span className="text-slate-300">Description</span>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              rows={3}
+              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
+            />
+          </label>
+        </div>
+
+        {err && <div className="mt-3 text-sm text-red-300">{err}</div>}
+
+        <div className="mt-5 flex items-center gap-2">
+          {existing && (
+            <button
+              onClick={del}
+              disabled={submitting}
+              className="mr-auto rounded bg-red-900/60 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800 disabled:opacity-50"
+            >
+              Delete
+            </button>
+          )}
+          <button
+            onClick={onClose}
+            disabled={submitting}
+            className="rounded bg-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 disabled:opacity-50"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={submit}
+            disabled={submitting || !title.trim()}
+            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
+          >
+            {existing ? 'Save' : 'Create'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

@@ -107,6 +107,18 @@ export async function syncAccount(
     return { ...result, error: 'account_inactive' };
   }
 
+  // Phase 7: flush any pending local writes BEFORE pulling remote state so
+  // our re-read picks up the server-echoed truth (and any post-push etags).
+  // Import lazily to avoid a cycle (write.ts imports types from sync.ts).
+  try {
+    const { pushPendingForAccount } = await import('./write.js');
+    await pushPendingForAccount(db, account, cfg);
+  } catch (err) {
+    // Push errors are recorded per-row; don't block the read sync.
+    const msg = err instanceof Error ? err.message : 'push_failed';
+    setLastError(db, account.id, `push:${msg}`);
+  }
+
   let accessToken: string;
   try {
     const refreshToken = cfg.crypto.open(account.refreshTokenEnc);
@@ -241,6 +253,40 @@ function applyEventRow(
 ): ApplyResult {
   const out: ApplyResult = { upserted: 0, deleted: 0, cancelledKept: 0 };
   if (!ev.id) return out;
+
+  // Phase 7: if we have a local row carrying a pending write (CREATE) that
+  // matches this Google event by mutationId (stored in extendedProperties),
+  // reconcile: swap the local provisional id for the real Google id and
+  // clear the dirty flag so we don't re-push a duplicate. This handles the
+  // case where a previous push succeeded but we lost the response.
+  const mutationId = ev.extendedProperties?.private?.homeOsMutationId;
+  if (mutationId && ev.status !== 'cancelled') {
+    const matchedLocal = db
+      .select()
+      .from(schema.calendarEvents)
+      .where(
+        and(
+          eq(schema.calendarEvents.calendarListId, calendarListId),
+          eq(schema.calendarEvents.mutationId, mutationId)
+        )
+      )
+      .get();
+    if (matchedLocal && matchedLocal.googleEventId !== ev.id) {
+      db.update(schema.calendarEvents)
+        .set({
+          googleEventId: ev.id,
+          etag: ev.etag ?? null,
+          localDirty: false,
+          pendingOp: null,
+          lastPushError: null,
+          lastPushAttemptAt: null,
+          updatedAt: NOW_SQL as unknown as string,
+        })
+        .where(eq(schema.calendarEvents.id, matchedLocal.id))
+        .run();
+    }
+  }
+
   const existing = db
     .select()
     .from(schema.calendarEvents)
@@ -251,6 +297,12 @@ function applyEventRow(
       )
     )
     .get();
+
+  // If the local row has a pending unpushed mutation, don't let a read-sync
+  // clobber the user's intent. Push engine will reconcile once it runs.
+  if (existing && existing.localDirty) {
+    return out;
+  }
 
   // Cancellation: during incremental sync, Google sends a stub with
   // status='cancelled' (and often only id/status). On a full sync, cancelled
@@ -454,6 +506,10 @@ export interface EventRow {
   htmlLink: string | null;
   recurringEventId: string | null;
   originalStartTime: string | null;
+  localDirty: boolean;
+  pendingOp: 'create' | 'update' | 'delete' | null;
+  hasConflict: boolean;
+  lastPushError: string | null;
 }
 
 export interface EventRowWithOwner extends EventRow {
@@ -502,13 +558,22 @@ function addDays(yyyymmdd: string, days: number): string {
   return `${yy}-${mm}-${dd}`;
 }
 
+function notPendingDelete() {
+  return or(
+    // SQL NULL-safe check: pending_op IS NULL or pending_op != 'delete'
+    eq(schema.calendarEvents.pendingOp, 'create'),
+    eq(schema.calendarEvents.pendingOp, 'update'),
+    dsql`${schema.calendarEvents.pendingOp} IS NULL`
+  );
+}
+
 export function listEventsForUserBetween(
   db: DB,
   userId: string,
   from: string,
   to: string
 ): EventRow[] {
-  return db
+  const rows = db
     .select({
       id: schema.calendarEvents.id,
       calendarListId: schema.calendarEvents.calendarListId,
@@ -527,6 +592,10 @@ export function listEventsForUserBetween(
       htmlLink: schema.calendarEvents.htmlLink,
       recurringEventId: schema.calendarEvents.recurringEventId,
       originalStartTime: schema.calendarEvents.originalStartTime,
+      localDirty: schema.calendarEvents.localDirty,
+      pendingOp: schema.calendarEvents.pendingOp,
+      conflictPayload: schema.calendarEvents.conflictPayload,
+      lastPushError: schema.calendarEvents.lastPushError,
     })
     .from(schema.calendarEvents)
     .innerJoin(
@@ -541,11 +610,21 @@ export function listEventsForUserBetween(
       and(
         eq(schema.calendarAccounts.userId, userId),
         eq(schema.calendarLists.selected, true),
+        notPendingDelete(),
         eventWindowOverlap(from, to)
       )
     )
     .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
-    .all() as EventRow[];
+    .all();
+  return rows.map(decorateEventRow);
+}
+
+function decorateEventRow<T extends {
+  conflictPayload: string | null;
+  localDirty: boolean;
+}>(r: T): Omit<T, 'conflictPayload'> & { hasConflict: boolean } {
+  const { conflictPayload, ...rest } = r;
+  return { ...rest, hasConflict: conflictPayload != null };
 }
 
 /**
@@ -558,7 +637,7 @@ export function listEventsForHouseholdBetween(
   from: string,
   to: string
 ): EventRowWithOwner[] {
-  return db
+  const rows = db
     .select({
       id: schema.calendarEvents.id,
       calendarListId: schema.calendarEvents.calendarListId,
@@ -577,6 +656,10 @@ export function listEventsForHouseholdBetween(
       htmlLink: schema.calendarEvents.htmlLink,
       recurringEventId: schema.calendarEvents.recurringEventId,
       originalStartTime: schema.calendarEvents.originalStartTime,
+      localDirty: schema.calendarEvents.localDirty,
+      pendingOp: schema.calendarEvents.pendingOp,
+      conflictPayload: schema.calendarEvents.conflictPayload,
+      lastPushError: schema.calendarEvents.lastPushError,
       ownerUserId: schema.users.id,
       ownerDisplayName: schema.users.displayName,
       ownerColor: schema.users.color,
@@ -597,11 +680,13 @@ export function listEventsForHouseholdBetween(
     .where(
       and(
         eq(schema.calendarLists.selected, true),
+        notPendingDelete(),
         eventWindowOverlap(from, to)
       )
     )
     .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
-    .all() as EventRowWithOwner[];
+    .all();
+  return rows.map(decorateEventRow);
 }
 
 export function listAccountsForUser(
