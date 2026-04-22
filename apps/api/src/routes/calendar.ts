@@ -10,6 +10,7 @@ import { logAudit } from '../auth/audit.js';
 import { makeTokenCrypto, deriveTokenKey, type TokenCrypto } from '../auth/crypto.js';
 import {
   listAccountsForUser,
+  listEventsForHouseholdBetween,
   listEventsForUserBetween,
   syncAccount,
   withAccountLock,
@@ -343,13 +344,13 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       return reply.code(400).send({ error: 'invalid_query', details: parsed.error.format() });
     }
-    const rows = listEventsForUserBetween(
-      db,
-      req.user!.id,
-      parsed.data.from,
-      parsed.data.to
-    );
-    return reply.send({ from: parsed.data.from, to: parsed.data.to, events: rows });
+    const { from, to, scope } = parsed.data;
+    if (scope === 'household') {
+      const rows = listEventsForHouseholdBetween(db, from, to);
+      return reply.send({ from, to, scope, events: rows });
+    }
+    const rows = listEventsForUserBetween(db, req.user!.id, from, to);
+    return reply.send({ from, to, scope, events: rows });
   });
 }
 
