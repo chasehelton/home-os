@@ -247,3 +247,67 @@ export const calendarEvents = sqliteTable(
     byMutation: index('calendar_events_mutation_idx').on(t.mutationId),
   })
 );
+
+// ---------------------------------------------------------------------------
+// Phase 9 — GitHub account connection.
+//
+// Per-user GitHub OAuth device-flow token, encrypted at rest with the same
+// key used for Google refresh tokens. Used exclusively by the Copilot AI
+// provider: the GitHub access token is exchanged for a short-lived Copilot
+// session token on each sync window.
+// ---------------------------------------------------------------------------
+
+export const githubAccounts = sqliteTable(
+  'github_accounts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    githubUserId: integer('github_user_id').notNull(),
+    githubLogin: text('github_login').notNull(),
+    accessTokenEnc: text('access_token_enc').notNull(),
+    scopes: text('scopes').notNull().default(''),
+    status: text('status', { enum: ['active', 'disabled'] }).notNull().default('active'),
+    lastError: text('last_error'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    byUser: uniqueIndex('github_accounts_user_idx').on(t.userId),
+    byGithub: uniqueIndex('github_accounts_github_id_idx').on(t.githubUserId),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Phase 9 — AI assistant transcripts.
+//
+// One row per AI interaction (parse or execute). Stored for debugging and
+// for the "recent prompts" history panel. `toolCallsJson` is the JSON-encoded
+// ToolCall[] returned by the provider; `outcomeJson` is a per-call array of
+// {ok, entityId?, error?} recorded at execute time (null for parse-only rows).
+// ---------------------------------------------------------------------------
+
+export const aiTranscripts = sqliteTable(
+  'ai_transcripts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    provider: text('provider').notNull(),
+    prompt: text('prompt').notNull(),
+    toolCallsJson: text('tool_calls_json').notNull(),
+    outcomeJson: text('outcome_json'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    byUserCreated: index('ai_transcripts_user_created_idx').on(t.userId, t.createdAt),
+  })
+);

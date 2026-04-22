@@ -42,15 +42,8 @@ const StateBlob = z.object({
 const CAL_SCOPE = 'https://www.googleapis.com/auth/calendar.readonly';
 const CAL_WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
-/** True if the stored OAuth `scopes` string grants write access. */
-export function hasWriteScope(scopes: string | null | undefined): boolean {
-  if (!scopes) return false;
-  const tokens = scopes.split(/\s+/);
-  return (
-    tokens.includes(CAL_WRITE_SCOPE) ||
-    tokens.includes('https://www.googleapis.com/auth/calendar')
-  );
-}
+export { hasWriteScope } from './calendar-helpers.js';
+import { hasWriteScope } from './calendar-helpers.js';
 
 function isProd(env: { NODE_ENV: string }): boolean {
   return env.NODE_ENV === 'production';
