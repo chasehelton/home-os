@@ -14,7 +14,11 @@ import { registerCalendarRoutes } from './routes/calendar.js';
 import { registerHouseholdRoutes } from './routes/household.js';
 import { registerAiRoutes } from './routes/ai.js';
 import { registerGithubRoutes } from './routes/github.js';
+import { registerReminderRoutes } from './routes/reminders.js';
+import { registerPushRoutes } from './routes/push.js';
 import { startCalendarWorker, type CalendarWorker } from './calendar/worker.js';
+import { createPushDispatcher } from './reminders/push.js';
+import { startReminderWorker, type ReminderWorker } from './reminders/worker.js';
 
 export interface AppDeps {
   env: Env;
@@ -68,9 +72,12 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   await registerHouseholdRoutes(app);
   await registerAiRoutes(app);
   await registerGithubRoutes(app);
+  await registerReminderRoutes(app);
+  await registerPushRoutes(app);
 
   const shouldStartWorkers = options.startWorkers ?? env.NODE_ENV !== 'test';
   let worker: CalendarWorker | null = null;
+  let reminderWorker: ReminderWorker | null = null;
   if (shouldStartWorkers) {
     worker = startCalendarWorker({
       db,
@@ -81,10 +88,26 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
         warn: (msg, obj) => app.log.warn(obj ?? {}, msg),
       },
     });
+    const dispatcher = await createPushDispatcher(env);
+    if (!dispatcher.enabled) {
+      app.log.info(
+        'reminders: push disabled (VAPID keys not configured or web-push not installed)',
+      );
+    }
+    reminderWorker = startReminderWorker({
+      db,
+      dispatcher,
+      intervalMs: env.HOME_OS_REMINDER_TICK_MS,
+      logger: {
+        info: (msg, obj) => app.log.info(obj ?? {}, msg),
+        warn: (msg, obj) => app.log.warn(obj ?? {}, msg),
+      },
+    });
   }
 
   app.addHook('onClose', async () => {
     worker?.stop();
+    reminderWorker?.stop();
     sqlite.close();
   });
 

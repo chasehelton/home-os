@@ -5,6 +5,8 @@ import { MealPlan } from './components/MealPlan';
 import { Settings } from './components/Settings';
 import { Calendar } from './components/Calendar';
 import { Assistant } from './components/Assistant';
+import { Reminders } from './components/Reminders';
+import { ReminderBanner } from './components/ReminderBanner';
 
 interface Me {
   id: string;
@@ -13,7 +15,7 @@ interface Me {
   pictureUrl: string | null;
 }
 
-type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'assistant' | 'settings';
+type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'reminders' | 'assistant' | 'settings';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -24,6 +26,7 @@ export function App() {
     return t === 'recipes' ||
       t === 'meals' ||
       t === 'calendar' ||
+      t === 'reminders' ||
       t === 'assistant' ||
       t === 'settings'
       ? t
@@ -81,19 +84,27 @@ export function App() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">home-os</h1>
           <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(['todos', 'recipes', 'meals', 'calendar', 'assistant', 'settings'] as Tab[]).map(
-              (t) => (
-                <button
-                  key={t}
-                  onClick={() => setTab(t)}
-                  className={`rounded px-3 py-1 capitalize ${
-                    tab === t ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
-                  }`}
-                >
-                  {t}
-                </button>
-              ),
-            )}
+            {(
+              [
+                'todos',
+                'recipes',
+                'meals',
+                'calendar',
+                'reminders',
+                'assistant',
+                'settings',
+              ] as Tab[]
+            ).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`rounded px-3 py-1 capitalize ${
+                  tab === t ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
+                }`}
+              >
+                {t}
+              </button>
+            ))}
           </nav>
         </div>
         <div className="flex items-center gap-3 text-sm">
@@ -114,6 +125,7 @@ export function App() {
           </button>
         </div>
       </header>
+      <ReminderBanner />
       {tab === 'todos' ? (
         <TodoList currentUserId={me.id} />
       ) : tab === 'recipes' ? (
@@ -122,6 +134,8 @@ export function App() {
         <MealPlan />
       ) : tab === 'calendar' ? (
         <Calendar currentUserId={me.id} />
+      ) : tab === 'reminders' ? (
+        <Reminders />
       ) : tab === 'assistant' ? (
         <Assistant />
       ) : (

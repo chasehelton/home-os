@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { disablePush, enablePush, getExistingSubscription, pushSupported } from '../lib/push';
 
 interface CalendarRow {
   id: string;
@@ -21,6 +22,15 @@ export function Settings() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [pushEnabled, setPushEnabled] = useState(false);
+  const [pushBusy, setPushBusy] = useState(false);
+  const [pushError, setPushError] = useState<string | null>(null);
+
+  async function refreshPush() {
+    if (!pushSupported()) return;
+    const sub = await getExistingSubscription();
+    setPushEnabled(!!sub);
+  }
 
   async function load() {
     setLoading(true);
@@ -39,7 +49,25 @@ export function Settings() {
 
   useEffect(() => {
     void load();
+    void refreshPush();
   }, []);
+
+  async function togglePush() {
+    setPushBusy(true);
+    setPushError(null);
+    try {
+      if (pushEnabled) {
+        await disablePush();
+      } else {
+        await enablePush();
+      }
+      await refreshPush();
+    } catch (e) {
+      setPushError(e instanceof Error ? e.message : 'push failed');
+    } finally {
+      setPushBusy(false);
+    }
+  }
 
   async function syncNow() {
     setBusy('sync');
@@ -91,6 +119,38 @@ export function Settings() {
             {busy === 'sync' ? 'Syncing…' : 'Sync now'}
           </button>
         </div>
+      </div>
+
+      <div className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-900/40 p-5">
+        <h3 className="text-lg font-medium">Notifications</h3>
+        <p className="text-sm text-slate-400">
+          Fired reminders always appear in the banner and on the kiosk. Turn on push to also get
+          system notifications on this device. iOS requires the PWA to be installed to the Home
+          Screen first.
+        </p>
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button
+            onClick={() => void togglePush()}
+            disabled={pushBusy || !pushSupported()}
+            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+          >
+            {pushBusy
+              ? pushEnabled
+                ? 'Disabling…'
+                : 'Enabling…'
+              : pushEnabled
+                ? 'Disable push on this device'
+                : 'Enable push on this device'}
+          </button>
+          {!pushSupported() && (
+            <span className="self-center text-xs text-slate-400">
+              Push not supported in this browser.
+            </span>
+          )}
+        </div>
+        {pushError && (
+          <div className="rounded bg-red-900/40 p-3 text-sm text-red-200">{pushError}</div>
+        )}
       </div>
 
       {error && <div className="rounded bg-red-900/40 p-3 text-sm text-red-200">{error}</div>}

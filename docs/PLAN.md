@@ -6,24 +6,24 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ## 🚦 Current Status
 
-**Up next: Phase 11 — Reminders & notifications.** Branch `main`; create `phase-11-reminders` after P10 PR merge.
+**MVP complete.** Phases 0–11 merged. Next work is post-MVP polish / new features (no phase 12 defined yet).
 
-| Phase                          | Status         | PR           |
-| ------------------------------ | -------------- | ------------ |
-| P0 Foundation                  | ✅ merged      | #0 (initial) |
-| P1 Identity & Ownership        | ✅ merged      | #1           |
-| P2 Todos                       | ✅ merged      | #2           |
-| P3 Recipes (defuddle markdown) | ✅ merged      | #3           |
-| P4 Meal Planning               | ✅ merged      | #5           |
-| P5 Calendar READ               | ✅ merged      | #6           |
-| P6 Calendar UI                 | ✅ merged      | #7           |
-| P7 Calendar WRITE              | ✅ merged      | #8           |
-| P8 Kiosk shell                 | ✅ merged      | #9           |
-| P9 AI assistant                | ✅ merged      | #10          |
-| **P10 Deploy & hardening**     | ⏳ **PR open** | —            |
-| P11 Reminders                  | pending        | —            |
+| Phase                          | Status    | PR           |
+| ------------------------------ | --------- | ------------ |
+| P0 Foundation                  | ✅ merged | #0 (initial) |
+| P1 Identity & Ownership        | ✅ merged | #1           |
+| P2 Todos                       | ✅ merged | #2           |
+| P3 Recipes (defuddle markdown) | ✅ merged | #3           |
+| P4 Meal Planning               | ✅ merged | #5           |
+| P5 Calendar READ               | ✅ merged | #6           |
+| P6 Calendar UI                 | ✅ merged | #7           |
+| P7 Calendar WRITE              | ✅ merged | #8           |
+| P8 Kiosk shell                 | ✅ merged | #9           |
+| P9 AI assistant                | ✅ merged | #10          |
+| P10 Deploy & hardening         | ✅ merged | #11          |
+| **P11 Reminders**              | ⏳ **PR open** | —       |
 
-**Repo health:** 164/164 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 186/186 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
@@ -310,11 +310,18 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - CI: `.github/workflows/docker.yml` builds both images for `linux/amd64 + linux/arm64` on every PR touching infra or app code; pushes to GHCR gated on the `PUSH_GHCR` repo variable so PRs don't need registry creds.
 - Tests: 16 new in `packages/db/test/` (destructive scanner — 10; snapshot helper — 4; pending enumeration — 2). All 164 tests pass; typecheck + lint + build clean.
 
-### Phase 11 — Reminders & Notifications (post-MVP polish but called out)
+### Phase 11 — Reminders & Notifications
 
-- Server-owned reminder scheduler (cron + queue in SQLite).
-- Push via Web Push for PWA (best-effort; iOS caveats documented).
-- Kiosk toast/banner for active reminders.
+- Schema: `reminders` (scope/owner, title/body, fire_at, status: pending|fired|dismissed|cancelled, entity_type/id, fired_at, dismissed_at) + `push_subscriptions` (endpoint-unique, userId, p256dh/auth, user_agent). Migration `0008_majestic_dracula.sql` — additive, scanner green.
+- Server-owned scheduler `apps/api/src/reminders/worker.ts`: setInterval (default 20 s, `HOME_OS_REMINDER_TICK_MS`) atomically claims due rows via a single `UPDATE … WHERE status='pending' AND fire_at<=now RETURNING` — immune to concurrent ticks / multi-process double-fire. Banner polling is the reliable delivery channel; Web Push is intentionally best-effort and lossy under crashes (documented).
+- Web Push via `web-push` with VAPID keys (`HOME_OS_VAPID_PUBLIC_KEY/_PRIVATE_KEY/_SUBJECT`). Keys optional: absent keys → `/api/push/vapid-public-key` returns 503 and push is logged as disabled; reminders still fire + show in banner. Permanent push failures (404/410) prune the dead subscription row; transient failures are logged + retried on next fire_at-eligible reminder (but reminders themselves are not re-sent — single-shot semantics).
+- Routes: `/api/reminders` (GET list, GET `/active`, POST, PATCH `:id`, DELETE `:id`, POST `:id/dismiss`) + `/api/push/vapid-public-key`, `/api/push/subscribe`, `/api/push/unsubscribe`. All writes scoped to `req.user.id`; subscription endpoint is unique → re-subscribing on a shared device reassigns the row to the new user, and `unsubscribe` silently no-ops for endpoints that don't belong to the caller. Subscription response never echoes p256dh/auth/endpoint; log redactor prints only `scheme://host/…`.
+- Visibility parity with todos: household reminders visible + dismissable by anyone; user reminders only to owner.
+- AI: `create_reminder` tool added to `packages/ai/src/tools.ts` discriminated union + OpenAI function defs; executor dispatches through the same repo layer (`ai.create_reminder` audit log action).
+- Web: PWA switched to `vite-plugin-pwa` `injectManifest` strategy with custom `src/sw.ts` (workbox precache + `push` + `notificationclick` handlers). Notification click focuses/opens `?tab=reminders`. New **Reminders** tab (list + create form, "Show dismissed" toggle). **Settings** gains an "Enable push on this device" toggle that walks the PushManager / VAPID flow and POSTs to `/api/push/subscribe`. New top-of-app `ReminderBanner` polls `/api/reminders/active` every 20 s and shows fired reminders with Dismiss buttons — kiosk inherits this automatically.
+- Kiosk: no separate code — loads the web build via Caddy, so the banner shows there too. Electron permits `Notification` by default on the kiosk Pi; desktop notifications for push require the user to grant permission the first time.
+- iOS caveat: iOS Safari only delivers Web Push when the PWA is installed to the Home Screen. Banner polling remains the primary channel.
+- Tests: 22 new (7 route · 6 push route · 6 worker · 3 AI tool). Total 186/186 passing · typecheck + lint + build clean.
 
 ---
 
