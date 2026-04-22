@@ -10,11 +10,7 @@ import {
   pushPendingForAccount,
   resolveWriteContext,
 } from '../calendar/write.js';
-import {
-  withAccountLock,
-  type AccountRow,
-  type SyncConfig,
-} from '../calendar/sync.js';
+import { withAccountLock, type AccountRow, type SyncConfig } from '../calendar/sync.js';
 import { safeFetch, FetchSafetyError } from '../recipes/safe-fetch.js';
 import { classifyImport, parseToMarkdown } from '../recipes/parse.js';
 import { downloadRecipeImage } from '../recipes/images.js';
@@ -48,10 +44,7 @@ export interface ToolOutcome {
   error?: string;
 }
 
-export async function executeToolCall(
-  ctx: ExecuteContext,
-  call: ToolCall
-): Promise<ToolOutcome> {
+export async function executeToolCall(ctx: ExecuteContext, call: ToolCall): Promise<ToolOutcome> {
   switch (call.tool) {
     case 'create_todo':
       return execCreateTodo(ctx, call.args);
@@ -66,7 +59,7 @@ export async function executeToolCall(
 
 function execCreateTodo(
   ctx: ExecuteContext,
-  args: Extract<ToolCall, { tool: 'create_todo' }>['args']
+  args: Extract<ToolCall, { tool: 'create_todo' }>['args'],
 ): ToolOutcome {
   try {
     const row = createTodo(ctx.db, ctx.userId, {
@@ -94,16 +87,13 @@ function execCreateTodo(
 /** Resolve the user's primary, write-capable calendar list (if any). */
 function findWritablePrimaryList(
   db: DB,
-  userId: string
+  userId: string,
 ): { listId: string; accountId: string } | null {
   const accounts = db
     .select()
     .from(schema.calendarAccounts)
     .where(
-      and(
-        eq(schema.calendarAccounts.userId, userId),
-        eq(schema.calendarAccounts.status, 'active')
-      )
+      and(eq(schema.calendarAccounts.userId, userId), eq(schema.calendarAccounts.status, 'active')),
     )
     .all();
   for (const a of accounts) {
@@ -111,12 +101,7 @@ function findWritablePrimaryList(
     const list = db
       .select()
       .from(schema.calendarLists)
-      .where(
-        and(
-          eq(schema.calendarLists.accountId, a.id),
-          eq(schema.calendarLists.primary, true)
-        )
-      )
+      .where(and(eq(schema.calendarLists.accountId, a.id), eq(schema.calendarLists.primary, true)))
       .get();
     if (list) return { listId: list.id, accountId: a.id };
   }
@@ -125,7 +110,7 @@ function findWritablePrimaryList(
 
 async function execCreateEvent(
   ctx: ExecuteContext,
-  args: Extract<ToolCall, { tool: 'create_event' }>['args']
+  args: Extract<ToolCall, { tool: 'create_event' }>['args'],
 ): Promise<ToolOutcome> {
   const target = findWritablePrimaryList(ctx.db, ctx.userId);
   if (!target) {
@@ -165,7 +150,7 @@ async function execCreateEvent(
 
 async function execImportRecipe(
   ctx: ExecuteContext,
-  args: Extract<ToolCall, { tool: 'import_recipe' }>['args']
+  args: Extract<ToolCall, { tool: 'import_recipe' }>['args'],
 ): Promise<ToolOutcome> {
   try {
     const html = await safeFetch(args.url, {
@@ -195,7 +180,7 @@ async function execImportRecipe(
         domain: parsedRecipe.domain,
         sourceUrl: html.finalUrl,
       },
-      { id, importStatus: status, imagePath, imageSourceUrl }
+      { id, importStatus: status, imagePath, imageSourceUrl },
     );
     await writeRecipeMarkdown(ctx.dataDir, id, parsedRecipe.markdown);
     logAudit(ctx.db, {

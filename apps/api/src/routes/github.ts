@@ -7,11 +7,7 @@ import {
   getGithubAccountPublic,
   upsertGithubAccount,
 } from '../github/accounts.js';
-import {
-  fetchGithubUser,
-  pollAccessToken,
-  requestDeviceCode,
-} from '../github/deviceFlow.js';
+import { fetchGithubUser, pollAccessToken, requestDeviceCode } from '../github/deviceFlow.js';
 
 // In-memory map of pending device codes, keyed per-user. Device codes are
 // short-lived (expires_in ~15 min) and single-use, so a process-local map is
@@ -152,7 +148,11 @@ export async function registerGithubRoutes(app: FastifyInstance) {
       pending.delete(req.user!.id);
       return reply
         .code(502)
-        .send({ status: 'error', error: 'user_lookup_failed', description: (err as Error).message });
+        .send({
+          status: 'error',
+          error: 'user_lookup_failed',
+          description: (err as Error).message,
+        });
     }
   });
 

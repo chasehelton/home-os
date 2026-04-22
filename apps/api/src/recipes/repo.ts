@@ -27,11 +27,7 @@ export function findRecipeById(db: DB, id: string): RecipeRow | null {
 }
 
 export function listRecipes(db: DB): RecipeRow[] {
-  return db
-    .select()
-    .from(schema.recipes)
-    .orderBy(desc(schema.recipes.updatedAt))
-    .all();
+  return db.select().from(schema.recipes).orderBy(desc(schema.recipes.updatedAt)).all();
 }
 
 export function createRecipeRow(
@@ -43,7 +39,7 @@ export function createRecipeRow(
     imagePath?: string | null;
     imageSourceUrl?: string | null;
     id?: string;
-  }
+  },
 ): RecipeRow {
   const id = opts.id ?? nanoid(21);
   db.insert(schema.recipes)
@@ -67,7 +63,7 @@ export function createRecipeRow(
 export function updateRecipeRow(
   db: DB,
   id: string,
-  patch: Omit<UpdateRecipeInput, 'markdown'>
+  patch: Omit<UpdateRecipeInput, 'markdown'>,
 ): RecipeRow | null {
   const existing = findRecipeById(db, id);
   if (!existing) return null;

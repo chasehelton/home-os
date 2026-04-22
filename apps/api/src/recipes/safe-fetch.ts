@@ -90,7 +90,7 @@ export interface SafeFetchResult {
  */
 export async function safeFetch(
   initialUrl: string,
-  opts: SafeFetchOptions
+  opts: SafeFetchOptions,
 ): Promise<SafeFetchResult> {
   const maxRedirects = opts.maxRedirects ?? 3;
   let currentUrl = initialUrl;

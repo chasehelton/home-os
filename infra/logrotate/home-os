@@ -1,0 +1,14 @@
+# logrotate config for host-level home-os log files (not docker json-file
+# logs — those are capped via compose's logging driver). Install as:
+#
+#   sudo cp infra/logrotate/home-os /etc/logrotate.d/home-os
+/var/log/home-os/*.log {
+    daily
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    su home-os home-os
+}

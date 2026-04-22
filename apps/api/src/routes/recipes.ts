@@ -1,11 +1,7 @@
 import fs from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { nanoid } from 'nanoid';
-import {
-  CreateRecipeInput,
-  ImportRecipeInput,
-  UpdateRecipeInput,
-} from '@home-os/shared';
+import { CreateRecipeInput, ImportRecipeInput, UpdateRecipeInput } from '@home-os/shared';
 import { requireUser } from '../auth/middleware.js';
 import { logAudit } from '../auth/audit.js';
 import {
@@ -20,11 +16,7 @@ import {
 import { safeFetch, FetchSafetyError } from '../recipes/safe-fetch.js';
 import { classifyImport, parseToMarkdown } from '../recipes/parse.js';
 import { downloadRecipeImage, resolveImagePath } from '../recipes/images.js';
-import {
-  deleteRecipeMarkdown,
-  readRecipeMarkdown,
-  writeRecipeMarkdown,
-} from '../recipes/files.js';
+import { deleteRecipeMarkdown, readRecipeMarkdown, writeRecipeMarkdown } from '../recipes/files.js';
 
 const MAX_HTML_BYTES = 2 * 1024 * 1024;
 const FETCH_TIMEOUT_MS = 15_000;
@@ -63,7 +55,7 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
       if (!row) return reply.code(404).send({ error: 'not_found' });
       const markdown = await readRecipeMarkdown(dataDir, row.id);
       return reply.send({ ...summarize(row), markdown });
-    }
+    },
   );
 
   app.post('/api/recipes', { preHandler: auth }, async (req, reply) => {
@@ -119,7 +111,7 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
           domain: parsedRecipe.domain,
           sourceUrl: html.finalUrl,
         },
-        { id, importStatus: status, imagePath, imageSourceUrl }
+        { id, importStatus: status, imagePath, imageSourceUrl },
       );
       await writeRecipeMarkdown(dataDir, id, parsedRecipe.markdown);
       logAudit(app.deps.db, {
@@ -176,7 +168,7 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
         after: row ? summarize(row) : null,
       });
       return reply.send({ ...summarize(row!), markdown: finalMarkdown });
-    }
+    },
   );
 
   app.delete<{ Params: { id: string } }>(
@@ -194,7 +186,7 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
         before: summarize(row),
       });
       return reply.code(204).send();
-    }
+    },
   );
 
   app.get<{ Params: { id: string } }>(
@@ -204,7 +196,8 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
       const row = findRecipeById(app.deps.db, req.params.id);
       if (!row || !row.imagePath) return reply.code(404).send({ error: 'not_found' });
       const resolved = resolveImagePath(dataDir, row.imagePath);
-      if (!resolved || !fs.existsSync(resolved)) return reply.code(404).send({ error: 'not_found' });
+      if (!resolved || !fs.existsSync(resolved))
+        return reply.code(404).send({ error: 'not_found' });
       const ext = resolved.split('.').pop()?.toLowerCase();
       const ct =
         ext === 'png'
@@ -217,6 +210,6 @@ export async function registerRecipeRoutes(app: FastifyInstance) {
       reply.header('content-type', ct);
       reply.header('cache-control', 'private, max-age=86400');
       return reply.send(fs.createReadStream(resolved));
-    }
+    },
   );
 }

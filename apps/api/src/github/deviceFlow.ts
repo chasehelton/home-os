@@ -86,7 +86,7 @@ export async function requestDeviceCode(opts: DeviceFlowOptions): Promise<Device
 
 /** Step 2: exchange a device_code for an access_token. Call once per interval. */
 export async function pollAccessToken(
-  opts: DeviceFlowOptions & { deviceCode: string }
+  opts: DeviceFlowOptions & { deviceCode: string },
 ): Promise<AccessTokenResult> {
   const fetchImpl = opts.fetchImpl ?? fetch;
   const body = new URLSearchParams({
@@ -134,7 +134,7 @@ export interface GithubUserIdentity {
 /** Looks up /user with a freshly-obtained access token so we can store the login/id. */
 export async function fetchGithubUser(
   accessToken: string,
-  fetchImpl: typeof fetch = fetch
+  fetchImpl: typeof fetch = fetch,
 ): Promise<GithubUserIdentity> {
   const res = await fetchImpl(USER_URL, {
     headers: {

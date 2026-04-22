@@ -71,12 +71,8 @@
           "name": "audit_log_actor_user_id_users_id_fk",
           "tableFrom": "audit_log",
           "tableTo": "users",
-          "columnsFrom": [
-            "actor_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["actor_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         }
@@ -165,17 +161,12 @@
       "indexes": {
         "calendar_accounts_google_sub_idx": {
           "name": "calendar_accounts_google_sub_idx",
-          "columns": [
-            "google_sub"
-          ],
+          "columns": ["google_sub"],
           "isUnique": true
         },
         "calendar_accounts_user_status_idx": {
           "name": "calendar_accounts_user_status_idx",
-          "columns": [
-            "user_id",
-            "status"
-          ],
+          "columns": ["user_id", "status"],
           "isUnique": false
         }
       },
@@ -184,12 +175,8 @@
           "name": "calendar_accounts_user_id_users_id_fk",
           "tableFrom": "calendar_accounts",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -398,40 +385,27 @@
       "indexes": {
         "calendar_events_list_event_idx": {
           "name": "calendar_events_list_event_idx",
-          "columns": [
-            "calendar_list_id",
-            "google_event_id"
-          ],
+          "columns": ["calendar_list_id", "google_event_id"],
           "isUnique": true
         },
         "calendar_events_list_start_idx": {
           "name": "calendar_events_list_start_idx",
-          "columns": [
-            "calendar_list_id",
-            "start_at"
-          ],
+          "columns": ["calendar_list_id", "start_at"],
           "isUnique": false
         },
         "calendar_events_list_date_idx": {
           "name": "calendar_events_list_date_idx",
-          "columns": [
-            "calendar_list_id",
-            "start_date"
-          ],
+          "columns": ["calendar_list_id", "start_date"],
           "isUnique": false
         },
         "calendar_events_dirty_idx": {
           "name": "calendar_events_dirty_idx",
-          "columns": [
-            "local_dirty"
-          ],
+          "columns": ["local_dirty"],
           "isUnique": false
         },
         "calendar_events_mutation_idx": {
           "name": "calendar_events_mutation_idx",
-          "columns": [
-            "mutation_id"
-          ],
+          "columns": ["mutation_id"],
           "isUnique": false
         }
       },
@@ -440,12 +414,8 @@
           "name": "calendar_events_calendar_list_id_calendar_lists_id_fk",
           "tableFrom": "calendar_events",
           "tableTo": "calendar_lists",
-          "columnsFrom": [
-            "calendar_list_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["calendar_list_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -577,17 +547,12 @@
       "indexes": {
         "calendar_lists_account_google_idx": {
           "name": "calendar_lists_account_google_idx",
-          "columns": [
-            "account_id",
-            "google_calendar_id"
-          ],
+          "columns": ["account_id", "google_calendar_id"],
           "isUnique": true
         },
         "calendar_lists_account_idx": {
           "name": "calendar_lists_account_idx",
-          "columns": [
-            "account_id"
-          ],
+          "columns": ["account_id"],
           "isUnique": false
         }
       },
@@ -596,12 +561,8 @@
           "name": "calendar_lists_account_id_calendar_accounts_id_fk",
           "tableFrom": "calendar_lists",
           "tableTo": "calendar_accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["account_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -682,10 +643,7 @@
       "indexes": {
         "meal_plan_entries_date_slot_idx": {
           "name": "meal_plan_entries_date_slot_idx",
-          "columns": [
-            "date",
-            "slot"
-          ],
+          "columns": ["date", "slot"],
           "isUnique": false
         }
       },
@@ -694,12 +652,8 @@
           "name": "meal_plan_entries_recipe_id_recipes_id_fk",
           "tableFrom": "meal_plan_entries",
           "tableTo": "recipes",
-          "columnsFrom": [
-            "recipe_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["recipe_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -707,12 +661,8 @@
           "name": "meal_plan_entries_created_by_users_id_fk",
           "tableFrom": "meal_plan_entries",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -824,12 +774,8 @@
           "name": "recipes_created_by_users_id_fk",
           "tableFrom": "recipes",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -877,12 +823,8 @@
           "name": "sessions_user_id_users_id_fk",
           "tableFrom": "sessions",
           "tableTo": "users",
-          "columnsFrom": [
-            "user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["user_id"],
+          "columnsTo": ["id"],
           "onDelete": "cascade",
           "onUpdate": "no action"
         }
@@ -973,12 +915,8 @@
           "name": "todos_owner_user_id_users_id_fk",
           "tableFrom": "todos",
           "tableTo": "users",
-          "columnsFrom": [
-            "owner_user_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["owner_user_id"],
+          "columnsTo": ["id"],
           "onDelete": "set null",
           "onUpdate": "no action"
         },
@@ -986,12 +924,8 @@
           "name": "todos_created_by_users_id_fk",
           "tableFrom": "todos",
           "tableTo": "users",
-          "columnsFrom": [
-            "created_by"
-          ],
-          "columnsTo": [
-            "id"
-          ],
+          "columnsFrom": ["created_by"],
+          "columnsTo": ["id"],
           "onDelete": "no action",
           "onUpdate": "no action"
         }
@@ -1072,16 +1006,12 @@
       "indexes": {
         "users_google_sub_unique": {
           "name": "users_google_sub_unique",
-          "columns": [
-            "google_sub"
-          ],
+          "columns": ["google_sub"],
           "isUnique": true
         },
         "users_email_unique": {
           "name": "users_email_unique",
-          "columns": [
-            "email"
-          ],
+          "columns": ["email"],
           "isUnique": true
         }
       },

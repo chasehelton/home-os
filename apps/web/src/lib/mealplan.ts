@@ -27,13 +27,11 @@ export interface MealPlanWeek {
 }
 
 export async function listMealPlan(weekStart: string): Promise<MealPlanWeek> {
-  return jsonFetch<MealPlanWeek>(
-    `/api/meal-plan?weekStart=${encodeURIComponent(weekStart)}`
-  );
+  return jsonFetch<MealPlanWeek>(`/api/meal-plan?weekStart=${encodeURIComponent(weekStart)}`);
 }
 
 export async function createMealPlanEntryApi(
-  body: CreateMealPlanEntryInput
+  body: CreateMealPlanEntryInput,
 ): Promise<MealPlanEntry> {
   return jsonFetch<MealPlanEntry>('/api/meal-plan', {
     method: 'POST',
@@ -43,7 +41,7 @@ export async function createMealPlanEntryApi(
 
 export async function updateMealPlanEntryApi(
   id: string,
-  body: UpdateMealPlanEntryInput
+  body: UpdateMealPlanEntryInput,
 ): Promise<MealPlanEntry> {
   return jsonFetch<MealPlanEntry>(`/api/meal-plan/${id}`, {
     method: 'PATCH',

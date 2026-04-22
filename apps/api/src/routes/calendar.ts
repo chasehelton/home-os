@@ -3,11 +3,7 @@ import * as client from 'openid-client';
 import { and, eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { z } from 'zod';
-import {
-  CalendarEventCreate,
-  CalendarEventUpdate,
-  ListCalendarEventsQuery,
-} from '@home-os/shared';
+import { CalendarEventCreate, CalendarEventUpdate, ListCalendarEventsQuery } from '@home-os/shared';
 import { schema } from '@home-os/db';
 import { requireUser } from '../auth/middleware.js';
 import { logAudit } from '../auth/audit.js';
@@ -59,19 +55,21 @@ function summarizeAccount(a: AccountRow & { calendars: unknown[] }) {
     canWrite: hasWriteScope(a.scopes),
     createdAt: a.createdAt,
     updatedAt: a.updatedAt,
-    calendars: (a.calendars as Array<{
-      id: string;
-      googleCalendarId: string;
-      summary: string;
-      description: string | null;
-      backgroundColor: string | null;
-      foregroundColor: string | null;
-      timeZone: string | null;
-      primary: boolean;
-      selected: boolean;
-      lastFullSyncAt: string | null;
-      lastIncrementalSyncAt: string | null;
-    }>).map((c) => ({
+    calendars: (
+      a.calendars as Array<{
+        id: string;
+        googleCalendarId: string;
+        summary: string;
+        description: string | null;
+        backgroundColor: string | null;
+        foregroundColor: string | null;
+        timeZone: string | null;
+        primary: boolean;
+        selected: boolean;
+        lastFullSyncAt: string | null;
+        lastIncrementalSyncAt: string | null;
+      }>
+    ).map((c) => ({
       id: c.id,
       googleCalendarId: c.googleCalendarId,
       summary: c.summary,
@@ -99,7 +97,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
       configPromise = client.discovery(
         new URL('https://accounts.google.com'),
         env.HOME_OS_GOOGLE_CLIENT_ID!,
-        env.HOME_OS_GOOGLE_CLIENT_SECRET!
+        env.HOME_OS_GOOGLE_CLIENT_SECRET!,
       );
     }
     return configPromise;
@@ -131,7 +129,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     // env for the base and derives the calendar callback deterministically.
     const redirectUri = env.HOME_OS_GOOGLE_REDIRECT_URI.replace(
       /\/auth\/google\/callback\/?$/,
-      '/auth/google/calendar/callback'
+      '/auth/google/calendar/callback',
     );
 
     const url = client.buildAuthorizationUrl(cfg, {
@@ -183,10 +181,10 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     const cfg = await getConfig();
     const redirectUri = env.HOME_OS_GOOGLE_REDIRECT_URI.replace(
       /\/auth\/google\/callback\/?$/,
-      '/auth/google/calendar/callback'
+      '/auth/google/calendar/callback',
     );
     const callbackUrl = new URL(
-      `${redirectUri}${req.url.replace('/auth/google/calendar/callback', '')}`
+      `${redirectUri}${req.url.replace('/auth/google/calendar/callback', '')}`,
     );
 
     let tokens: client.TokenEndpointResponse & client.TokenEndpointResponseHelpers;
@@ -204,7 +202,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     const claims = tokens.claims();
     const refreshToken =
       typeof (tokens as { refresh_token?: unknown }).refresh_token === 'string'
-        ? ((tokens as { refresh_token: string }).refresh_token)
+        ? (tokens as { refresh_token: string }).refresh_token
         : null;
     if (!claims || !refreshToken) {
       return reply.code(400).send({ error: 'missing_refresh_token' });
@@ -214,7 +212,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     const grantedEmail = typeof claims.email === 'string' ? claims.email.toLowerCase() : '';
     const scope =
       typeof (tokens as { scope?: unknown }).scope === 'string'
-        ? ((tokens as { scope: string }).scope)
+        ? (tokens as { scope: string }).scope
         : CAL_SCOPE;
 
     // Safety: calendar account MUST bind to the currently logged-in user's
@@ -284,8 +282,8 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
       .get() as AccountRow | undefined;
     if (account) {
       setImmediate(() => {
-        void withAccountLock(accountId, () => syncAccount(db, account, syncCfg)).catch(
-          (err) => req.log.warn({ err }, 'initial calendar sync failed')
+        void withAccountLock(accountId, () => syncAccount(db, account, syncCfg)).catch((err) =>
+          req.log.warn({ err }, 'initial calendar sync failed'),
         );
       });
     }
@@ -311,16 +309,14 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
         .where(
           and(
             eq(schema.calendarAccounts.id, req.params.id),
-            eq(schema.calendarAccounts.userId, req.user!.id)
-          )
+            eq(schema.calendarAccounts.userId, req.user!.id),
+          ),
         )
         .get();
       if (!existing) return reply.code(404).send({ error: 'not_found' });
       // Acquire the account lock first so we don't race an in-flight tick.
       await withAccountLock(existing.id, async () => {
-        db.delete(schema.calendarAccounts)
-          .where(eq(schema.calendarAccounts.id, existing.id))
-          .run();
+        db.delete(schema.calendarAccounts).where(eq(schema.calendarAccounts.id, existing.id)).run();
       });
       logAudit(db, {
         actorUserId: req.user!.id,
@@ -330,7 +326,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
         before: { email: existing.email },
       });
       return reply.code(204).send();
-    }
+    },
   );
 
   app.post('/api/calendar/sync', { preHandler: auth }, async (req, reply) => {
@@ -340,8 +336,8 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
       .where(
         and(
           eq(schema.calendarAccounts.userId, req.user!.id),
-          eq(schema.calendarAccounts.status, 'active')
-        )
+          eq(schema.calendarAccounts.status, 'active'),
+        ),
       )
       .all() as AccountRow[];
     const results = [];
@@ -453,15 +449,19 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
       }
       // Scope check up front: look up the event's account.
       const existing = db
-        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .select({
+          event: schema.calendarEvents,
+          list: schema.calendarLists,
+          account: schema.calendarAccounts,
+        })
         .from(schema.calendarEvents)
         .innerJoin(
           schema.calendarLists,
-          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
         )
         .innerJoin(
           schema.calendarAccounts,
-          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
         )
         .where(eq(schema.calendarEvents.id, req.params.id))
         .get();
@@ -490,7 +490,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
         return reply.code(409).send({ error: 'conflict', event: fresh });
       }
       return reply.send({ event: fresh });
-    }
+    },
   );
 
   app.delete<{ Params: { id: string } }>(
@@ -498,15 +498,19 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     { preHandler: auth },
     async (req, reply) => {
       const existing = db
-        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .select({
+          event: schema.calendarEvents,
+          list: schema.calendarLists,
+          account: schema.calendarAccounts,
+        })
         .from(schema.calendarEvents)
         .innerJoin(
           schema.calendarLists,
-          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
         )
         .innerJoin(
           schema.calendarAccounts,
-          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
         )
         .where(eq(schema.calendarEvents.id, req.params.id))
         .get();
@@ -526,7 +530,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
         req.log.warn({ err }, 'calendar push after delete failed');
       }
       return reply.code(204).send();
-    }
+    },
   );
 
   app.post<{ Params: { id: string } }>(
@@ -534,15 +538,19 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     { preHandler: auth },
     async (req, reply) => {
       const existing = db
-        .select({ event: schema.calendarEvents, list: schema.calendarLists, account: schema.calendarAccounts })
+        .select({
+          event: schema.calendarEvents,
+          list: schema.calendarLists,
+          account: schema.calendarAccounts,
+        })
         .from(schema.calendarEvents)
         .innerJoin(
           schema.calendarLists,
-          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+          eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
         )
         .innerJoin(
           schema.calendarAccounts,
-          eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+          eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
         )
         .where(eq(schema.calendarEvents.id, req.params.id))
         .get();
@@ -560,7 +568,7 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
         entityId: req.params.id,
       });
       return reply.code(204).send();
-    }
+    },
   );
 }
 

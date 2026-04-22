@@ -10,10 +10,7 @@ import {
   updateRecipeApi,
 } from '../lib/recipes';
 
-type View =
-  | { kind: 'list' }
-  | { kind: 'detail'; id: string }
-  | { kind: 'edit'; id: string };
+type View = { kind: 'list' } | { kind: 'detail'; id: string } | { kind: 'edit'; id: string };
 
 export function Recipes() {
   const [view, setView] = useState<View>({ kind: 'list' });
@@ -149,7 +146,9 @@ function RecipeDetail({
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    void getRecipe(id).then(setRecipe).catch((e) => setError((e as Error).message));
+    void getRecipe(id)
+      .then(setRecipe)
+      .catch((e) => setError((e as Error).message));
   }, [id]);
 
   if (error) {

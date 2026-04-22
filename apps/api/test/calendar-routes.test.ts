@@ -12,8 +12,20 @@ beforeEach(async () => {
   // Two users to exercise cross-user isolation.
   db.insert(schema.users)
     .values([
-      { id: 'u-a', email: 'a@example.com', emailVerified: true, displayName: 'A', googleSub: 'sub-a' },
-      { id: 'u-b', email: 'b@example.com', emailVerified: true, displayName: 'B', googleSub: 'sub-b' },
+      {
+        id: 'u-a',
+        email: 'a@example.com',
+        emailVerified: true,
+        displayName: 'A',
+        googleSub: 'sub-a',
+      },
+      {
+        id: 'u-b',
+        email: 'b@example.com',
+        emailVerified: true,
+        displayName: 'B',
+        googleSub: 'sub-b',
+      },
     ])
     .run();
   const crypto = makeTokenCrypto(deriveTokenKey(ctx.deps.env));
@@ -78,7 +90,10 @@ describe('calendar routes', () => {
   it('require auth', async () => {
     const r1 = await ctx.app.inject({ method: 'GET', url: '/api/calendar/accounts' });
     expect(r1.statusCode).toBe(401);
-    const r2 = await ctx.app.inject({ method: 'GET', url: '/api/calendar/events?from=2025-01-01T00:00:00Z&to=2025-02-01T00:00:00Z' });
+    const r2 = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/calendar/events?from=2025-01-01T00:00:00Z&to=2025-02-01T00:00:00Z',
+    });
     expect(r2.statusCode).toBe(401);
   });
 
@@ -170,16 +185,19 @@ describe('calendar routes', () => {
 
   it('window overlap: picks up events that started before "from" but end inside', async () => {
     // Event that starts at 23:00 UTC on 2025-03-09 and ends at 01:00 UTC on 2025-03-10
-    ctx.deps.db.insert(schema.calendarEvents).values({
-      id: 'ev-overnight',
-      calendarListId: 'list-a',
-      googleEventId: 'g-over',
-      title: 'Overnight',
-      allDay: false,
-      startAt: '2025-03-09T23:00:00.000Z',
-      endAt: '2025-03-10T01:00:00.000Z',
-      status: 'confirmed',
-    }).run();
+    ctx.deps.db
+      .insert(schema.calendarEvents)
+      .values({
+        id: 'ev-overnight',
+        calendarListId: 'list-a',
+        googleEventId: 'g-over',
+        title: 'Overnight',
+        allDay: false,
+        startAt: '2025-03-09T23:00:00.000Z',
+        endAt: '2025-03-10T01:00:00.000Z',
+        status: 'confirmed',
+      })
+      .run();
     const res = await ctx.app.inject({
       method: 'GET',
       url: '/api/calendar/events?from=2025-03-10&to=2025-03-10',
@@ -191,16 +209,19 @@ describe('calendar routes', () => {
   });
 
   it('window overlap: picks up multi-day all-day events that span the window', async () => {
-    ctx.deps.db.insert(schema.calendarEvents).values({
-      id: 'ev-trip',
-      calendarListId: 'list-a',
-      googleEventId: 'g-trip',
-      title: 'Trip',
-      allDay: true,
-      startDate: '2025-05-01',
-      endDateExclusive: '2025-05-10',
-      status: 'confirmed',
-    }).run();
+    ctx.deps.db
+      .insert(schema.calendarEvents)
+      .values({
+        id: 'ev-trip',
+        calendarListId: 'list-a',
+        googleEventId: 'g-trip',
+        title: 'Trip',
+        allDay: true,
+        startDate: '2025-05-01',
+        endDateExclusive: '2025-05-10',
+        status: 'confirmed',
+      })
+      .run();
     const res = await ctx.app.inject({
       method: 'GET',
       url: '/api/calendar/events?from=2025-05-05&to=2025-05-05',
@@ -214,33 +235,42 @@ describe('calendar routes', () => {
   it('scope=household returns events from all users with owner fields', async () => {
     // Give u-b their own account + event
     const crypto = makeTokenCrypto(deriveTokenKey(ctx.deps.env));
-    ctx.deps.db.insert(schema.calendarAccounts).values({
-      id: 'acc-b',
-      userId: 'u-b',
-      googleSub: 'sub-b',
-      email: 'b@example.com',
-      refreshTokenEnc: crypto.seal('rt-b'),
-      scopes: 'x',
-      status: 'active',
-    }).run();
-    ctx.deps.db.insert(schema.calendarLists).values({
-      id: 'list-b',
-      accountId: 'acc-b',
-      googleCalendarId: 'primary',
-      summary: 'B',
-      primary: true,
-      selected: true,
-    }).run();
-    ctx.deps.db.insert(schema.calendarEvents).values({
-      id: 'ev-b',
-      calendarListId: 'list-b',
-      googleEventId: 'gb',
-      title: 'B event',
-      allDay: false,
-      startAt: '2025-03-10T14:00:00.000Z',
-      endAt: '2025-03-10T15:00:00.000Z',
-      status: 'confirmed',
-    }).run();
+    ctx.deps.db
+      .insert(schema.calendarAccounts)
+      .values({
+        id: 'acc-b',
+        userId: 'u-b',
+        googleSub: 'sub-b',
+        email: 'b@example.com',
+        refreshTokenEnc: crypto.seal('rt-b'),
+        scopes: 'x',
+        status: 'active',
+      })
+      .run();
+    ctx.deps.db
+      .insert(schema.calendarLists)
+      .values({
+        id: 'list-b',
+        accountId: 'acc-b',
+        googleCalendarId: 'primary',
+        summary: 'B',
+        primary: true,
+        selected: true,
+      })
+      .run();
+    ctx.deps.db
+      .insert(schema.calendarEvents)
+      .values({
+        id: 'ev-b',
+        calendarListId: 'list-b',
+        googleEventId: 'gb',
+        title: 'B event',
+        allDay: false,
+        startAt: '2025-03-10T14:00:00.000Z',
+        endAt: '2025-03-10T15:00:00.000Z',
+        status: 'confirmed',
+      })
+      .run();
 
     const res = await ctx.app.inject({
       method: 'GET',
@@ -251,8 +281,9 @@ describe('calendar routes', () => {
     const body = res.json();
     expect(body.scope).toBe('household');
     const byId = Object.fromEntries(
-      (body.events as Array<{ id: string; ownerUserId: string; ownerDisplayName: string }>)
-        .map((e) => [e.id, e])
+      (body.events as Array<{ id: string; ownerUserId: string; ownerDisplayName: string }>).map(
+        (e) => [e.id, e],
+      ),
     );
     expect(byId['ev-in']?.ownerUserId).toBe('u-a');
     expect(byId['ev-b']?.ownerUserId).toBe('u-b');

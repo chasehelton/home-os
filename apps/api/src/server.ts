@@ -4,13 +4,19 @@ import { runMigrations } from '@home-os/db';
 
 const env = loadEnv();
 
-// Apply pending migrations on startup. In production this is gated by
-// scripts/migrate-with-snapshot.sh (Phase 10) which takes a backup first.
-try {
-  runMigrations({ dataDir: env.HOME_OS_DATA_DIR });
-} catch (err) {
-  console.error('Migration failed:', err);
-  process.exit(1);
+// Apply pending migrations on startup. In production set
+// HOME_OS_AUTO_MIGRATE=false and use the one-shot `migrate` compose service
+// (which runs scripts/migrate-with-snapshot.sh) so schema changes go through
+// the destructive-migration gate and a pre-migrate snapshot.
+if (env.HOME_OS_AUTO_MIGRATE) {
+  try {
+    runMigrations({ dataDir: env.HOME_OS_DATA_DIR });
+  } catch (err) {
+    console.error('Migration failed:', err);
+    process.exit(1);
+  }
+} else {
+  console.log('[home-os] HOME_OS_AUTO_MIGRATE=false — skipping auto-migrate (production flow).');
 }
 
 const { app } = await buildApp({ env });

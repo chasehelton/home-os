@@ -1,0 +1,86 @@
+# syntax=docker/dockerfile:1.7
+#
+# home-os API image.
+#
+# Multi-stage build:
+#   1. `deps`  — install ALL workspace deps once (frozen lockfile) so the
+#      build stage has typescript/tsx/etc. available.
+#   2. `build` — run `pnpm -r build` for the api and its workspace deps
+#      (@home-os/db, @home-os/shared, @home-os/ai).
+#   3. `runtime` — slim image with production deps only + compiled JS.
+#
+# We use `node:22-bookworm-slim` (glibc) not alpine because `better-sqlite3`
+# is a native module and arm64 prebuilts don't always match musl. The slim
+# variant still gives us a small image and broad arm64 support.
+#
+# Build: docker buildx build --platform linux/amd64,linux/arm64 -f infra/docker/Dockerfile.api .
+
+ARG NODE_VERSION=22-bookworm-slim
+
+# ---------- deps ----------------------------------------------------------
+FROM node:${NODE_VERSION} AS deps
+WORKDIR /repo
+RUN corepack enable
+# Tools needed to compile better-sqlite3 on arm64 where a prebuilt isn't
+# available. Removed from the final image.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      python3 make g++ ca-certificates \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY tsconfig.base.json tsconfig.json ./
+COPY apps/api/package.json        apps/api/package.json
+COPY apps/web/package.json        apps/web/package.json
+COPY apps/kiosk/package.json      apps/kiosk/package.json
+COPY packages/ai/package.json     packages/ai/package.json
+COPY packages/db/package.json     packages/db/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
+    pnpm config set store-dir /pnpm-store && \
+    pnpm install --frozen-lockfile
+
+# ---------- build ---------------------------------------------------------
+FROM deps AS build
+COPY apps/api        apps/api
+COPY packages/ai     packages/ai
+COPY packages/db     packages/db
+COPY packages/shared packages/shared
+
+RUN pnpm --filter=@home-os/shared --filter=@home-os/db --filter=@home-os/ai --filter=@home-os/api build
+
+# Prune to production deps only for the runtime image.
+RUN pnpm --filter=@home-os/api deploy --prod --legacy /app
+
+# ---------- runtime -------------------------------------------------------
+FROM node:${NODE_VERSION} AS runtime
+WORKDIR /app
+ENV NODE_ENV=production
+ENV HOME_OS_API_HOST=0.0.0.0
+ENV HOME_OS_API_PORT=4000
+ENV HOME_OS_DATA_DIR=/var/lib/home-os
+ENV HOME_OS_AUTO_MIGRATE=false
+
+# Runtime deps: sqlite3 CLI (for snapshot/backup scripts + debugging) and
+# dumb-init to reap signals in PID 1.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+      sqlite3 dumb-init ca-certificates tini \
+ && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app /app
+# The migrations folder is read at runtime by runMigrations() / migrate:safe.
+COPY --from=build /repo/packages/db/migrations /app/node_modules/@home-os/db/migrations
+
+# Non-root; uid/gid 1000 matches the provision script's `home-os` user so
+# bind mounts Just Work.
+RUN groupadd --gid 1000 home-os \
+ && useradd  --uid 1000 --gid 1000 --home /app --shell /usr/sbin/nologin home-os \
+ && mkdir -p /var/lib/home-os && chown -R 1000:1000 /var/lib/home-os /app
+USER 1000:1000
+
+EXPOSE 4000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s --retries=3 \
+  CMD node -e "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "/app/apps/api/dist/server.js"]

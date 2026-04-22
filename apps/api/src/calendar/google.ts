@@ -6,7 +6,7 @@ export class GoogleApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly body: unknown
+    public readonly body: unknown,
   ) {
     super(message);
     this.name = 'GoogleApiError';
@@ -184,7 +184,7 @@ export interface EventsListParams {
 export async function listEventsPage(params: EventsListParams): Promise<EventsListResult> {
   const f = params.fetchImpl ?? fetch;
   const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`,
   );
   url.searchParams.set('maxResults', '250');
   url.searchParams.set('singleEvents', 'true');
@@ -263,7 +263,7 @@ export interface InsertEventParams {
 export async function insertEvent(params: InsertEventParams): Promise<GoogleEvent> {
   const f = params.fetchImpl ?? fetch;
   const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`,
   );
   const res = await f(url.toString(), {
     method: 'POST',
@@ -289,7 +289,7 @@ export interface PatchEventParams {
 export async function patchEvent(params: PatchEventParams): Promise<GoogleEvent> {
   const f = params.fetchImpl ?? fetch;
   const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events/${encodeURIComponent(params.eventId)}`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events/${encodeURIComponent(params.eventId)}`,
   );
   const headers: Record<string, string> = {
     authorization: `Bearer ${params.accessToken}`,
@@ -316,7 +316,7 @@ export interface DeleteEventParams {
 export async function deleteEvent(params: DeleteEventParams): Promise<void> {
   const f = params.fetchImpl ?? fetch;
   const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events/${encodeURIComponent(params.eventId)}`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events/${encodeURIComponent(params.eventId)}`,
   );
   const headers: Record<string, string> = {
     authorization: `Bearer ${params.accessToken}`,
@@ -343,7 +343,7 @@ export async function findByMutationId(params: {
 }): Promise<GoogleEvent | null> {
   const f = params.fetchImpl ?? fetch;
   const url = new URL(
-    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`
+    `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(params.calendarId)}/events`,
   );
   url.searchParams.set('maxResults', '2');
   url.searchParams.set('showDeleted', 'true');

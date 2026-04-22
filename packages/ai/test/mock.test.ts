@@ -9,9 +9,7 @@ describe('MockProvider', () => {
 
   it('parses a shared todo', async () => {
     const out = await p.parseIntent('add milk to the shared todo list', ctx);
-    expect(out).toEqual([
-      { tool: 'create_todo', args: { title: 'milk', scope: 'household' } },
-    ]);
+    expect(out).toEqual([{ tool: 'create_todo', args: { title: 'milk', scope: 'household' } }]);
   });
 
   it('parses a personal todo when "my" is present', async () => {
@@ -22,10 +20,7 @@ describe('MockProvider', () => {
   });
 
   it('parses import_recipe from a URL', async () => {
-    const out = await p.parseIntent(
-      'import recipe https://example.com/cookie-bars',
-      ctx
-    );
+    const out = await p.parseIntent('import recipe https://example.com/cookie-bars', ctx);
     expect(out).toEqual([
       { tool: 'import_recipe', args: { url: 'https://example.com/cookie-bars' } },
     ]);
@@ -37,9 +32,7 @@ describe('MockProvider', () => {
     expect(out[0]?.tool).toBe('create_event');
     const args = (out[0] as { args: { startAt: string; endAt: string } }).args;
     expect(new Date(args.startAt).valueOf()).toBeGreaterThan(NOW.valueOf());
-    expect(new Date(args.endAt).valueOf()).toBeGreaterThan(
-      new Date(args.startAt).valueOf()
-    );
+    expect(new Date(args.endAt).valueOf()).toBeGreaterThan(new Date(args.startAt).valueOf());
   });
 
   it('returns empty for unrecognized prompts', async () => {

@@ -1,0 +1,32 @@
+# systemd unit: bring the home-os docker compose stack up at boot.
+#
+# Assumptions:
+#   - /opt/home-os is a git clone of this repo (provision-pi.sh does this).
+#   - /opt/home-os/.env exists (provision-pi.sh copies .env.example).
+#   - Docker Engine is installed with the compose plugin (v2).
+#
+# Install:
+#   sudo cp infra/systemd/home-os.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now home-os.service
+[Unit]
+Description=home-os docker compose stack
+Requires=docker.service
+After=docker.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/home-os
+EnvironmentFile=/opt/home-os/.env
+# Using `compose up` (not `up -d`) so systemd owns the foreground process;
+# journald captures the stdout/stderr stream.
+ExecStartPre=/usr/bin/docker compose -f infra/docker/docker-compose.yml pull --ignore-pull-failures
+ExecStart=/usr/bin/docker compose -f infra/docker/docker-compose.yml up
+ExecStop=/usr/bin/docker compose -f infra/docker/docker-compose.yml down
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=multi-user.target

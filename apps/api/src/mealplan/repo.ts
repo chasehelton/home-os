@@ -2,11 +2,7 @@ import { and, asc, eq, gte, lte, sql as dsql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import type { DB } from '@home-os/db';
 import { schema } from '@home-os/db';
-import type {
-  CreateMealPlanEntryInput,
-  MealSlot,
-  UpdateMealPlanEntryInput,
-} from '@home-os/shared';
+import type { CreateMealPlanEntryInput, MealSlot, UpdateMealPlanEntryInput } from '@home-os/shared';
 
 export interface MealPlanEntryRow {
   id: string;
@@ -24,32 +20,25 @@ const NOW_SQL = dsql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`;
 
 export function findMealPlanEntryById(db: DB, id: string): MealPlanEntryRow | null {
   return (
-    db
-      .select()
-      .from(schema.mealPlanEntries)
-      .where(eq(schema.mealPlanEntries.id, id))
-      .get() ?? null
+    db.select().from(schema.mealPlanEntries).where(eq(schema.mealPlanEntries.id, id)).get() ?? null
   );
 }
 
 export function listMealPlanEntriesBetween(
   db: DB,
   fromDate: string,
-  toDate: string
+  toDate: string,
 ): MealPlanEntryRow[] {
   return db
     .select()
     .from(schema.mealPlanEntries)
     .where(
-      and(
-        gte(schema.mealPlanEntries.date, fromDate),
-        lte(schema.mealPlanEntries.date, toDate)
-      )
+      and(gte(schema.mealPlanEntries.date, fromDate), lte(schema.mealPlanEntries.date, toDate)),
     )
     .orderBy(
       asc(schema.mealPlanEntries.date),
       dsql`CASE ${schema.mealPlanEntries.slot} WHEN 'breakfast' THEN 0 WHEN 'lunch' THEN 1 WHEN 'dinner' THEN 2 WHEN 'snack' THEN 3 ELSE 4 END`,
-      asc(schema.mealPlanEntries.createdAt)
+      asc(schema.mealPlanEntries.createdAt),
     )
     .all();
 }
@@ -57,7 +46,7 @@ export function listMealPlanEntriesBetween(
 export function createMealPlanEntry(
   db: DB,
   actorId: string,
-  input: CreateMealPlanEntryInput
+  input: CreateMealPlanEntryInput,
 ): MealPlanEntryRow {
   const id = nanoid(21);
   db.insert(schema.mealPlanEntries)
@@ -77,7 +66,7 @@ export function createMealPlanEntry(
 export function updateMealPlanEntry(
   db: DB,
   id: string,
-  patch: UpdateMealPlanEntryInput
+  patch: UpdateMealPlanEntryInput,
 ): MealPlanEntryRow | null {
   const existing = findMealPlanEntryById(db, id);
   if (!existing) return null;

@@ -112,7 +112,7 @@ export const mealPlanEntries = sqliteTable(
   },
   (t) => ({
     dateSlotIdx: index('meal_plan_entries_date_slot_idx').on(t.date, t.slot),
-  })
+  }),
 );
 
 // ---------------------------------------------------------------------------
@@ -137,7 +137,9 @@ export const calendarAccounts = sqliteTable(
     email: text('email').notNull(),
     refreshTokenEnc: text('refresh_token_enc'),
     scopes: text('scopes').notNull(),
-    status: text('status', { enum: ['active', 'disabled'] }).notNull().default('active'),
+    status: text('status', { enum: ['active', 'disabled'] })
+      .notNull()
+      .default('active'),
     lastError: text('last_error'),
     createdAt: text('created_at')
       .notNull()
@@ -149,7 +151,7 @@ export const calendarAccounts = sqliteTable(
   (t) => ({
     bySub: uniqueIndex('calendar_accounts_google_sub_idx').on(t.googleSub),
     byUserStatus: index('calendar_accounts_user_status_idx').on(t.userId, t.status),
-  })
+  }),
 );
 
 export const calendarLists = sqliteTable(
@@ -181,10 +183,10 @@ export const calendarLists = sqliteTable(
   (t) => ({
     byAccountCal: uniqueIndex('calendar_lists_account_google_idx').on(
       t.accountId,
-      t.googleCalendarId
+      t.googleCalendarId,
     ),
     byAccount: index('calendar_lists_account_idx').on(t.accountId),
-  })
+  }),
 );
 
 // Store both "timed" (start_at / end_at, UTC ISO) and "all-day" (start_date /
@@ -239,13 +241,13 @@ export const calendarEvents = sqliteTable(
   (t) => ({
     byListEvent: uniqueIndex('calendar_events_list_event_idx').on(
       t.calendarListId,
-      t.googleEventId
+      t.googleEventId,
     ),
     byListStart: index('calendar_events_list_start_idx').on(t.calendarListId, t.startAt),
     byListDate: index('calendar_events_list_date_idx').on(t.calendarListId, t.startDate),
     byDirty: index('calendar_events_dirty_idx').on(t.localDirty),
     byMutation: index('calendar_events_mutation_idx').on(t.mutationId),
-  })
+  }),
 );
 
 // ---------------------------------------------------------------------------
@@ -268,7 +270,9 @@ export const githubAccounts = sqliteTable(
     githubLogin: text('github_login').notNull(),
     accessTokenEnc: text('access_token_enc').notNull(),
     scopes: text('scopes').notNull().default(''),
-    status: text('status', { enum: ['active', 'disabled'] }).notNull().default('active'),
+    status: text('status', { enum: ['active', 'disabled'] })
+      .notNull()
+      .default('active'),
     lastError: text('last_error'),
     createdAt: text('created_at')
       .notNull()
@@ -280,7 +284,7 @@ export const githubAccounts = sqliteTable(
   (t) => ({
     byUser: uniqueIndex('github_accounts_user_idx').on(t.userId),
     byGithub: uniqueIndex('github_accounts_github_id_idx').on(t.githubUserId),
-  })
+  }),
 );
 
 // ---------------------------------------------------------------------------
@@ -309,5 +313,5 @@ export const aiTranscripts = sqliteTable(
   },
   (t) => ({
     byUserCreated: index('ai_transcripts_user_created_idx').on(t.userId, t.createdAt),
-  })
+  }),
 );

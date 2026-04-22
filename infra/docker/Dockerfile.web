@@ -1,0 +1,41 @@
+# syntax=docker/dockerfile:1.7
+#
+# home-os web image (Vite SPA served by Caddy).
+#
+# Build: docker buildx build --platform linux/amd64,linux/arm64 -f infra/docker/Dockerfile.web .
+
+ARG NODE_VERSION=22-bookworm-slim
+ARG CADDY_VERSION=2-alpine
+
+# ---------- build ---------------------------------------------------------
+FROM node:${NODE_VERSION} AS build
+WORKDIR /repo
+RUN corepack enable
+
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY tsconfig.base.json tsconfig.json ./
+COPY apps/api/package.json        apps/api/package.json
+COPY apps/web/package.json        apps/web/package.json
+COPY apps/kiosk/package.json      apps/kiosk/package.json
+COPY packages/ai/package.json     packages/ai/package.json
+COPY packages/db/package.json     packages/db/package.json
+COPY packages/shared/package.json packages/shared/package.json
+
+# Web build needs @home-os/shared only (plus dev deps like vite/tsc).
+RUN --mount=type=cache,id=pnpm,target=/pnpm-store \
+    pnpm config set store-dir /pnpm-store && \
+    pnpm install --frozen-lockfile \
+      --filter=@home-os/web... --filter=@home-os/shared
+
+COPY apps/web        apps/web
+COPY packages/shared packages/shared
+
+RUN pnpm --filter=@home-os/shared --filter=@home-os/web build
+
+# ---------- runtime (caddy static) ---------------------------------------
+FROM caddy:${CADDY_VERSION} AS runtime
+COPY --from=build /repo/apps/web/dist /srv/www
+COPY infra/caddy/Caddyfile.web /etc/caddy/Caddyfile
+EXPOSE 8080
+HEALTHCHECK --interval=30s --timeout=5s --start-period=5s \
+  CMD wget -q -O - http://127.0.0.1:8080/ > /dev/null || exit 1

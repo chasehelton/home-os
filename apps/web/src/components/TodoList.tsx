@@ -20,9 +20,7 @@ export function TodoList({ currentUserId }: { currentUserId: string }) {
   const [scope, setScope] = useState<'household' | 'user'>('household');
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(0);
-  const [online, setOnline] = useState(
-    typeof navigator === 'undefined' ? true : navigator.onLine
-  );
+  const [online, setOnline] = useState(typeof navigator === 'undefined' ? true : navigator.onLine);
 
   async function refresh() {
     try {
@@ -149,7 +147,10 @@ export function TodoList({ currentUserId }: { currentUserId: string }) {
           <option value="household">Household</option>
           <option value="user">Mine</option>
         </select>
-        <button className="rounded bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500" type="submit">
+        <button
+          className="rounded bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500"
+          type="submit"
+        >
           Add
         </button>
       </form>
@@ -161,10 +162,7 @@ export function TodoList({ currentUserId }: { currentUserId: string }) {
           <li className="py-8 text-center text-slate-500">Nothing here yet.</li>
         )}
         {visible.map((t) => (
-          <li
-            key={t.id}
-            className="flex items-center gap-3 rounded-lg bg-slate-800 p-3"
-          >
+          <li key={t.id} className="flex items-center gap-3 rounded-lg bg-slate-800 p-3">
             <button
               onClick={() => toggle(t)}
               aria-label={t.completedAt ? 'Mark incomplete' : 'Mark complete'}

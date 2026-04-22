@@ -267,10 +267,7 @@ export function Assistant() {
 
   const isCopilot = status?.provider === 'copilot';
   const needsGithub = !!(isCopilot && status?.needsGithub);
-  const disabled = useMemo(
-    () => status && (!status.enabled || needsGithub),
-    [status, needsGithub]
-  );
+  const disabled = useMemo(() => status && (!status.enabled || needsGithub), [status, needsGithub]);
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-slate-100">
@@ -328,8 +325,8 @@ export function Assistant() {
           ) : (
             <div className="flex items-center justify-between gap-3">
               <div className="text-slate-200">
-                Connect your GitHub account to enable the assistant. The assistant uses
-                GitHub Copilot via the official SDK — no separate API key needed.
+                Connect your GitHub account to enable the assistant. The assistant uses GitHub
+                Copilot via the official SDK — no separate API key needed.
               </div>
               <button
                 onClick={() => void onConnectGithub()}
@@ -341,17 +338,15 @@ export function Assistant() {
             </div>
           )}
           {ghError && (
-            <div className="mt-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">
-              {ghError}
-            </div>
+            <div className="mt-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{ghError}</div>
           )}
         </div>
       )}
 
       {status && !status.enabled && !isCopilot && (
         <div className="mb-4 rounded border border-amber-700 bg-amber-950 px-3 py-2 text-sm text-amber-200">
-          AI is disabled on this server. Set <code>HOME_OS_AI_PROVIDER</code> (and a key for
-          OpenAI) to enable it.
+          AI is disabled on this server. Set <code>HOME_OS_AI_PROVIDER</code> (and a key for OpenAI)
+          to enable it.
         </div>
       )}
 
@@ -401,11 +396,7 @@ export function Assistant() {
             Proposed actions ({proposals.length})
           </h3>
           {proposals.map((call, i) => (
-            <ProposalCard
-              key={i}
-              call={call}
-              onChange={(next) => updateProposal(i, () => next)}
-            />
+            <ProposalCard key={i} call={call} onChange={(next) => updateProposal(i, () => next)} />
           ))}
           <div>
             <button
@@ -431,9 +422,7 @@ export function Assistant() {
                   : 'border-red-800 bg-red-950 text-red-100'
               }`}
             >
-              {o.ok
-                ? `✓ ${o.entityType} created (${o.entityId})`
-                : `✗ ${o.error ?? 'failed'}`}
+              {o.ok ? `✓ ${o.entityType} created (${o.entityId})` : `✗ ${o.error ?? 'failed'}`}
             </div>
           ))}
         </div>
@@ -467,23 +456,14 @@ export function Assistant() {
   );
 }
 
-function ProposalCard({
-  call,
-  onChange,
-}: {
-  call: ToolCall;
-  onChange: (next: ToolCall) => void;
-}) {
+function ProposalCard({ call, onChange }: { call: ToolCall; onChange: (next: ToolCall) => void }) {
   return (
     <div className="rounded border border-slate-700 bg-slate-900 p-3">
       <div className="mb-2 text-xs font-medium uppercase tracking-wide text-blue-300">
         {call.tool.replace(/_/g, ' ')}
       </div>
       {call.tool === 'create_todo' && (
-        <TodoFields
-          args={call.args}
-          onChange={(args) => onChange({ tool: 'create_todo', args })}
-        />
+        <TodoFields args={call.args} onChange={(args) => onChange({ tool: 'create_todo', args })} />
       )}
       {call.tool === 'create_event' && (
         <EventFields
@@ -533,9 +513,7 @@ function TodoFields({
         <select
           className={inputCls}
           value={args.scope}
-          onChange={(e) =>
-            onChange({ ...args, scope: e.target.value as 'household' | 'user' })
-          }
+          onChange={(e) => onChange({ ...args, scope: e.target.value as 'household' | 'user' })}
         >
           <option value="household">household</option>
           <option value="user">user</option>
@@ -545,9 +523,7 @@ function TodoFields({
         <input
           className={inputCls}
           value={args.dueAt ?? ''}
-          onChange={(e) =>
-            onChange({ ...args, dueAt: e.target.value || null })
-          }
+          onChange={(e) => onChange({ ...args, dueAt: e.target.value || null })}
           placeholder="2026-05-01T18:00:00-04:00"
         />
       </Field>
@@ -589,9 +565,7 @@ function EventFields({
         <input
           className={inputCls}
           value={args.location ?? ''}
-          onChange={(e) =>
-            onChange({ ...args, location: e.target.value || null })
-          }
+          onChange={(e) => onChange({ ...args, location: e.target.value || null })}
         />
       </Field>
     </>

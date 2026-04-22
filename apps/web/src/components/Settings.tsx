@@ -129,7 +129,9 @@ export function Settings() {
                       <span className="text-slate-500">•</span>
                       <span>{c.summary}</span>
                       {c.primary && (
-                        <span className="rounded bg-slate-800 px-1.5 text-xs text-slate-400">primary</span>
+                        <span className="rounded bg-slate-800 px-1.5 text-xs text-slate-400">
+                          primary
+                        </span>
                       )}
                     </li>
                   ))}

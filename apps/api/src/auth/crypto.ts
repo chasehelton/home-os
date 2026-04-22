@@ -1,9 +1,4 @@
-import {
-  createCipheriv,
-  createDecipheriv,
-  createHash,
-  randomBytes,
-} from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
 import type { Env } from '../env.js';
 
 // Versioned envelope: `v1:<base64(iv(12) | ciphertext | tag(16))>`.
@@ -39,7 +34,7 @@ export function deriveTokenKey(env: Env): Buffer {
   }
   if (env.NODE_ENV === 'production') {
     throw new TokenCryptoError(
-      'HOME_OS_TOKEN_KEY is required in production (32-byte hex or base64)'
+      'HOME_OS_TOKEN_KEY is required in production (32-byte hex or base64)',
     );
   }
   // Dev/test fallback: derive from the session secret. Not a security claim,

@@ -111,7 +111,7 @@ export async function registerMealPlanRoutes(app: FastifyInstance) {
         after: row,
       });
       return reply.send(row);
-    }
+    },
   );
 
   app.delete<{ Params: { id: string } }>(
@@ -128,6 +128,6 @@ export async function registerMealPlanRoutes(app: FastifyInstance) {
         before: row,
       });
       return reply.code(204).send();
-    }
+    },
   );
 }

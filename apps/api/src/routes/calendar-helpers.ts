@@ -7,7 +7,6 @@ export function hasWriteScope(scopes: string | null | undefined): boolean {
   if (!scopes) return false;
   const tokens = scopes.split(/\s+/);
   return (
-    tokens.includes(CAL_WRITE_SCOPE) ||
-    tokens.includes('https://www.googleapis.com/auth/calendar')
+    tokens.includes(CAL_WRITE_SCOPE) || tokens.includes('https://www.googleapis.com/auth/calendar')
   );
 }

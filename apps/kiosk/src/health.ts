@@ -21,11 +21,7 @@ export function initialHealthState(cfg: HealthConfig): HealthState {
   };
 }
 
-export function onHealthResult(
-  state: HealthState,
-  ok: boolean,
-  cfg: HealthConfig
-): HealthState {
+export function onHealthResult(state: HealthState, ok: boolean, cfg: HealthConfig): HealthState {
   if (ok) {
     return {
       consecutiveFailures: 0,

@@ -54,9 +54,7 @@ describe('CopilotProvider (via @github/copilot-sdk)', () => {
     });
     const out = await p.parseIntent('add milk', ctx);
 
-    expect(out).toEqual([
-      { tool: 'create_todo', args: { title: 'milk', scope: 'household' } },
-    ]);
+    expect(out).toEqual([{ tool: 'create_todo', args: { title: 'milk', scope: 'household' } }]);
     expect(factory).toHaveBeenCalledWith({ githubToken: 'gho_abc' });
     expect(client.start).toHaveBeenCalledOnce();
     expect(session.disconnect).toHaveBeenCalledOnce();

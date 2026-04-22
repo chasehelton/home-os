@@ -30,7 +30,7 @@ export function MealPlan() {
   const weekStartYmd = toYmd(weekStart);
   const days = useMemo(
     () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
+    [weekStart],
   );
 
   async function refresh() {
@@ -48,7 +48,9 @@ export function MealPlan() {
   }, [weekStartYmd]);
 
   useEffect(() => {
-    void listRecipes().then(setRecipes).catch(() => {});
+    void listRecipes()
+      .then(setRecipes)
+      .catch(() => {});
   }, []);
 
   const byCell = useMemo(() => {
@@ -292,9 +294,7 @@ function EntryModal({
         onSubmit={submit}
         className="flex w-full max-w-md flex-col gap-3 rounded-lg bg-slate-900 p-5 shadow-xl ring-1 ring-slate-700"
       >
-        <h2 className="text-lg font-semibold">
-          {initial.id ? 'Edit meal' : 'Plan a meal'}
-        </h2>
+        <h2 className="text-lg font-semibold">{initial.id ? 'Edit meal' : 'Plan a meal'}</h2>
         <div className="text-xs text-slate-400">
           {labelForDate} · <span className="capitalize">{slot}</span>
         </div>

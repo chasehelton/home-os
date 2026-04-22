@@ -1,0 +1,39 @@
+# home-os edge reverse proxy (tailnet-facing).
+#
+# Terminates TLS on the tailnet hostname using `tls internal` (Caddy's
+# self-signed CA) for local-only clients, OR the Tailscale cert when the
+# HOME_OS_TAILNET_HOST is a real tailnet FQDN and TS_AUTHKEY is set. We
+# keep it simple: listen on :443 with `tls internal` by default; override
+# via the Caddyfile snippet in infra/caddy/Caddyfile.tailscale if you want
+# Tailscale's MagicDNS certs.
+#
+# Routing:
+#   /api/*    → api container (Fastify, port 4000)
+#   /auth/*   → api (Google OAuth + session routes)
+#   /health/* → api (liveness/readiness)
+#   *         → web container (Caddy static SPA, port 8080)
+{
+	# admin API off so we don't expose it on the tailnet accidentally
+	admin off
+	# structured logs go to stdout (collected by docker log driver)
+	log {
+		output stdout
+		format json
+	}
+}
+
+# The site address is injected at runtime as $HOME_OS_TAILNET_HOST.
+# Caddy env-var substitution uses `{$VAR}`.
+{$HOME_OS_TAILNET_HOST:home-os.local} {
+	encode zstd gzip
+
+	@api path /api/* /auth/* /health/*
+	reverse_proxy @api api:4000
+
+	# Everything else: the SPA.
+	reverse_proxy web:8080
+
+	# Local-CA TLS. Swap to `tls /etc/caddy/tailscale.crt /etc/caddy/tailscale.key`
+	# if you wire in tailscale cert renewal (see infra/caddy/README-tailscale.md).
+	tls internal
+}

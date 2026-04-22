@@ -10,10 +10,15 @@ let ctx: Awaited<ReturnType<typeof makeTestApp>>;
 const WRITE_SCOPE = 'https://www.googleapis.com/auth/calendar.events';
 
 function stubFetch(
-  responder: (info: { method: string; url: string; headers: Record<string, string>; body: unknown }) => {
+  responder: (info: {
+    method: string;
+    url: string;
+    headers: Record<string, string>;
+    body: unknown;
+  }) => {
     status: number;
     body: unknown;
-  }
+  },
 ): typeof fetch {
   return (async (input: URL | string | Request, init?: RequestInit) => {
     const url = typeof input === 'string' ? input : input.toString();

@@ -63,7 +63,7 @@ export interface CopilotClientLike {
 export interface CopilotSessionLike {
   sendAndWait(
     options: { prompt: string },
-    timeout?: number
+    timeout?: number,
   ): Promise<{ data?: { content?: string | null } } | undefined>;
   disconnect(): Promise<void>;
 }

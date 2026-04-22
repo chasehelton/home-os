@@ -11,7 +11,11 @@
         height: 100%;
         background: #0f172a;
         color: #e2e8f0;
-        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+        font-family:
+          system-ui,
+          -apple-system,
+          Segoe UI,
+          sans-serif;
       }
       main {
         display: flex;
@@ -75,12 +79,12 @@
       <div class="card">
         <h1>Can't reach the home server</h1>
         <p id="message">
-          The kiosk couldn't load the web app. This usually means the server
-          is starting up or the network is down.
+          The kiosk couldn't load the web app. This usually means the server is starting up or the
+          network is down.
         </p>
         <p>
-          Scan the QR with a phone to open the same URL from another device,
-          or press the button to retry.
+          Scan the QR with a phone to open the same URL from another device, or press the button to
+          retry.
         </p>
         <button onclick="location.reload()">Retry now</button>
       </div>
@@ -104,10 +108,7 @@
         if (code || msg) {
           var m = document.getElementById('message');
           m.innerHTML +=
-            '<br><br><code>' +
-            (msg || 'error') +
-            (code ? ' (' + code + ')' : '') +
-            '</code>';
+            '<br><br><code>' + (msg || 'error') + (code ? ' (' + code + ')' : '') + '</code>';
         }
         try {
           var qr = qrcode(0, 'M');

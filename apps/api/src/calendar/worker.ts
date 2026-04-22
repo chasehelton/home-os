@@ -7,7 +7,10 @@ export interface StartWorkerOptions {
   db: DB;
   cfg: SyncConfig;
   intervalMs: number;
-  logger?: { info: (msg: string, obj?: unknown) => void; warn: (msg: string, obj?: unknown) => void };
+  logger?: {
+    info: (msg: string, obj?: unknown) => void;
+    warn: (msg: string, obj?: unknown) => void;
+  };
 }
 
 export interface CalendarWorker {

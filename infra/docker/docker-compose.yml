@@ -1,0 +1,136 @@
+# home-os — Docker Compose for Raspberry Pi deployment.
+#
+# Usage (after scripts/provision-pi.sh has run once):
+#
+#   cp .env.example .env && $EDITOR .env
+#   docker compose -f infra/docker/docker-compose.yml --env-file .env up -d
+#
+# Volume layout (see plan.md §4a):
+#
+#   home_os_db        mounted RO+RW only into api and litestream
+#                     (the DB file — WAL/SHM go here too)
+#   home_os_recipes   markdown files — api only
+#   home_os_images    recipe images   — api only
+#   home_os_backups   sqlite3 .backup snapshots + tar archives — api only
+#   home_os_caddy     caddy data (internal CA, certs)
+#
+# All four data volumes are backed by a single bind mount at
+# ${HOME_OS_DATA_DIR} (default /srv/home-os/data) so moving to a USB-SSD is a
+# path change, not a data migration.
+
+name: home-os
+
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '5'
+
+services:
+  migrate:
+    # One-shot: snapshot the DB, run the destructive-migration gate, apply
+    # pending migrations, exit 0. The api service depends on this completing
+    # successfully, so production migrations are never silently auto-applied.
+    image: ${HOME_OS_API_IMAGE:-ghcr.io/chasehelton/home-os-api:latest}
+    restart: 'no'
+    environment:
+      HOME_OS_DATA_DIR: /var/lib/home-os
+      HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS: ${HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS:-0}
+    volumes:
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/db:/var/lib/home-os/db
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/backups:/var/lib/home-os/backups
+    user: '1000:1000'
+    entrypoint: ['dumb-init', '--']
+    command:
+      - node
+      - /app/node_modules/@home-os/db/dist/migrate-safe.js
+    logging: *default-logging
+
+  api:
+    image: ${HOME_OS_API_IMAGE:-ghcr.io/chasehelton/home-os-api:latest}
+    restart: unless-stopped
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: production
+      HOME_OS_API_HOST: 0.0.0.0
+      HOME_OS_API_PORT: '4000'
+      HOME_OS_DATA_DIR: /var/lib/home-os
+      HOME_OS_AUTO_MIGRATE: 'false'
+      HOME_OS_WEB_ORIGIN: ${HOME_OS_WEB_ORIGIN}
+      HOME_OS_SESSION_SECRET: ${HOME_OS_SESSION_SECRET}
+      HOME_OS_TOKEN_KEY: ${HOME_OS_TOKEN_KEY}
+      HOME_OS_GOOGLE_CLIENT_ID: ${HOME_OS_GOOGLE_CLIENT_ID}
+      HOME_OS_GOOGLE_CLIENT_SECRET: ${HOME_OS_GOOGLE_CLIENT_SECRET}
+      HOME_OS_GOOGLE_REDIRECT_URI: ${HOME_OS_GOOGLE_REDIRECT_URI}
+      HOME_OS_ALLOWED_EMAILS: ${HOME_OS_ALLOWED_EMAILS}
+      HOME_OS_AI_PROVIDER: ${HOME_OS_AI_PROVIDER:-disabled}
+      HOME_OS_OPENAI_API_KEY: ${HOME_OS_OPENAI_API_KEY:-}
+      HOME_OS_GITHUB_CLIENT_ID: ${HOME_OS_GITHUB_CLIENT_ID:-Iv1.b507a08c87ecfe98}
+      HOME_OS_COPILOT_MODEL: ${HOME_OS_COPILOT_MODEL:-gpt-5}
+    volumes:
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/db:/var/lib/home-os/db
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/recipes:/var/lib/home-os/recipes
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/images:/var/lib/home-os/images
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/backups:/var/lib/home-os/backups
+    expose:
+      - '4000'
+    healthcheck:
+      test:
+        [
+          'CMD',
+          'node',
+          '-e',
+          "fetch('http://127.0.0.1:4000/health/ready').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    logging: *default-logging
+
+  web:
+    image: ${HOME_OS_WEB_IMAGE:-ghcr.io/chasehelton/home-os-web:latest}
+    restart: unless-stopped
+    expose:
+      - '8080'
+    logging: *default-logging
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    depends_on:
+      - api
+      - web
+    environment:
+      HOME_OS_TAILNET_HOST: ${HOME_OS_TAILNET_HOST:-home-os.local}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ../caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    logging: *default-logging
+
+  litestream:
+    image: litestream/litestream:0.3
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      LITESTREAM_REPLICA_URL: ${LITESTREAM_REPLICA_URL}
+      LITESTREAM_ACCESS_KEY_ID: ${LITESTREAM_ACCESS_KEY_ID}
+      LITESTREAM_SECRET_ACCESS_KEY: ${LITESTREAM_SECRET_ACCESS_KEY}
+      LITESTREAM_REGION: ${LITESTREAM_REGION:-}
+      HOME_OS_DB_PATH: /data/db/home-os.sqlite
+    command: ['replicate', '-config', '/etc/litestream.yml']
+    volumes:
+      - ${HOME_OS_DATA_DIR:-/srv/home-os/data}/db:/data/db:ro
+      - ../litestream/litestream.yml:/etc/litestream.yml:ro
+    logging: *default-logging
+
+volumes:
+  caddy_data:
+  caddy_config:

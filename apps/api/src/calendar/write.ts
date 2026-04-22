@@ -78,7 +78,7 @@ export class WriteError extends Error {
       | 'invalid_times'
       | 'write_scope_missing'
       | 'conflict',
-    message?: string
+    message?: string,
   ) {
     super(message ?? code);
     this.name = 'WriteError';
@@ -127,7 +127,7 @@ export interface WriteContext {
 export function resolveWriteContext(
   db: DB,
   userId: string,
-  calendarListId: string
+  calendarListId: string,
 ): { list: CalendarListRow; account: AccountRow } {
   const list = db
     .select()
@@ -145,11 +145,7 @@ export function resolveWriteContext(
   return { list, account };
 }
 
-export function createLocalEvent(
-  db: DB,
-  userId: string,
-  input: EventCreateInput
-): EventRowFull {
+export function createLocalEvent(db: DB, userId: string, input: EventCreateInput): EventRowFull {
   validateTimes(input);
   const { list, account } = resolveWriteContext(db, userId, input.calendarListId);
   if (account.status !== 'active') throw new WriteError('not_found');
@@ -197,7 +193,7 @@ export function updateLocalEvent(
   db: DB,
   userId: string,
   id: string,
-  input: EventUpdateInput
+  input: EventUpdateInput,
 ): EventRowFull {
   const row = getOwnedEvent(db, userId, id);
   if (row.recurringEventId) throw new WriteError('recurring_edit_unsupported');
@@ -287,11 +283,11 @@ export function getOwnedEvent(db: DB, userId: string, id: string): EventRowFull 
     .from(schema.calendarEvents)
     .innerJoin(
       schema.calendarLists,
-      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
     )
     .innerJoin(
       schema.calendarAccounts,
-      eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+      eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
     )
     .where(eq(schema.calendarEvents.id, id))
     .get();
@@ -300,11 +296,7 @@ export function getOwnedEvent(db: DB, userId: string, id: string): EventRowFull 
 }
 
 function getEventRow(db: DB, id: string): EventRowFull {
-  const row = db
-    .select()
-    .from(schema.calendarEvents)
-    .where(eq(schema.calendarEvents.id, id))
-    .get();
+  const row = db.select().from(schema.calendarEvents).where(eq(schema.calendarEvents.id, id)).get();
   if (!row) throw new WriteError('not_found');
   return row as EventRowFull;
 }
@@ -320,10 +312,7 @@ export interface PushResult {
   errors: number;
 }
 
-function toGoogleBody(
-  row: EventRowFull,
-  mutationId: string | null
-): EventWriteBody {
+function toGoogleBody(row: EventRowFull, mutationId: string | null): EventWriteBody {
   const body: EventWriteBody = {
     summary: row.title ?? undefined,
     description: row.description ?? undefined,
@@ -349,10 +338,7 @@ function toGoogleBody(
   return body;
 }
 
-async function getAccessToken(
-  account: AccountRow,
-  cfg: SyncConfig
-): Promise<string> {
+async function getAccessToken(account: AccountRow, cfg: SyncConfig): Promise<string> {
   if (!account.refreshTokenEnc) throw new Error('account_inactive');
   const refreshToken = cfg.crypto.open(account.refreshTokenEnc);
   const { accessToken } = await refreshAccessToken({
@@ -371,7 +357,7 @@ async function getAccessToken(
 export async function pushPendingForAccount(
   db: DB,
   account: AccountRow,
-  cfg: SyncConfig
+  cfg: SyncConfig,
 ): Promise<PushResult> {
   const out: PushResult = { attempted: 0, pushed: 0, conflicts: 0, errors: 0 };
   const dirtyRows = db
@@ -382,13 +368,13 @@ export async function pushPendingForAccount(
     .from(schema.calendarEvents)
     .innerJoin(
       schema.calendarLists,
-      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
     )
     .where(
       and(
         eq(schema.calendarLists.accountId, account.id),
-        eq(schema.calendarEvents.localDirty, true)
-      )
+        eq(schema.calendarEvents.localDirty, true),
+      ),
     )
     .all();
   if (dirtyRows.length === 0) return out;
@@ -441,7 +427,7 @@ async function pushOne(
   row: EventRowFull,
   list: CalendarListRow,
   accessToken: string,
-  cfg: SyncConfig
+  cfg: SyncConfig,
 ): Promise<void> {
   const op = row.pendingOp;
   if (!op) {
