@@ -49,7 +49,7 @@ describe('ai routes (disabled provider, default)', () => {
       headers: { cookie: cookieFor('u-a') },
     });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ provider: 'disabled', enabled: false });
+    expect(res.json()).toEqual({ provider: 'disabled', enabled: false, needsGithub: false });
   });
 
   it('POST /api/ai/parse returns 503 when disabled', async () => {

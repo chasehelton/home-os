@@ -49,6 +49,36 @@ interface Transcript {
 interface Status {
   provider: string;
   enabled: boolean;
+  needsGithub?: boolean;
+}
+
+interface GithubStatus {
+  connected: boolean;
+  clientId: string;
+  account: {
+    githubLogin: string;
+    githubUserId: number;
+    scopes: string;
+    status: string;
+    createdAt: string;
+  } | null;
+  pendingAuthorization: boolean;
+}
+
+interface DeviceStart {
+  userCode: string;
+  verificationUri: string;
+  expiresIn: number;
+  interval: number;
+}
+
+interface PollResponse {
+  status: 'ok' | 'pending' | 'error';
+  reason?: string;
+  error?: string;
+  description?: string | null;
+  interval?: number;
+  account?: { githubLogin: string; githubUserId: number; scopes: string };
 }
 
 async function jsonFetch<T>(url: string, init?: RequestInit): Promise<T> {
@@ -70,12 +100,24 @@ export function Assistant() {
   const [executing, setExecuting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [transcripts, setTranscripts] = useState<Transcript[]>([]);
+  const [gh, setGh] = useState<GithubStatus | null>(null);
+  const [device, setDevice] = useState<DeviceStart | null>(null);
+  const [ghError, setGhError] = useState<string | null>(null);
+  const [connecting, setConnecting] = useState(false);
 
   async function loadStatus() {
     try {
       setStatus(await jsonFetch<Status>('/api/ai/status'));
     } catch (e) {
       setError((e as Error).message);
+    }
+  }
+
+  async function loadGithubStatus() {
+    try {
+      setGh(await jsonFetch<GithubStatus>('/api/github/status'));
+    } catch {
+      /* non-fatal — GitHub routes are optional UX */
     }
   }
 
@@ -91,7 +133,75 @@ export function Assistant() {
   useEffect(() => {
     void loadStatus();
     void loadTranscripts();
+    void loadGithubStatus();
   }, []);
+
+  async function onConnectGithub() {
+    setGhError(null);
+    setConnecting(true);
+    try {
+      const start = await jsonFetch<DeviceStart>('/api/github/device/start', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: '{}',
+      });
+      setDevice(start);
+      // Open GitHub's verification page in a new tab for the user.
+      window.open(start.verificationUri, '_blank', 'noopener,noreferrer');
+      // Start polling.
+      await pollUntilDone(start.interval);
+    } catch (e) {
+      setGhError((e as Error).message);
+    } finally {
+      setConnecting(false);
+    }
+  }
+
+  async function pollUntilDone(startInterval: number) {
+    let interval = Math.max(1, startInterval);
+    const deadline = Date.now() + 15 * 60 * 1000;
+    while (Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, interval * 1000));
+      let resp: PollResponse;
+      try {
+        resp = await jsonFetch<PollResponse>('/api/github/device/poll', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: '{}',
+        });
+      } catch (e) {
+        setGhError((e as Error).message);
+        return;
+      }
+      if (resp.status === 'ok') {
+        setDevice(null);
+        await loadGithubStatus();
+        await loadStatus();
+        return;
+      }
+      if (resp.status === 'error') {
+        setDevice(null);
+        setGhError(resp.error ?? 'authorization_failed');
+        return;
+      }
+      if (resp.interval && resp.interval > interval) interval = resp.interval;
+    }
+    setDevice(null);
+    setGhError('Authorization timed out.');
+  }
+
+  async function onDisconnectGithub() {
+    if (!confirm('Disconnect GitHub? This disables the AI assistant until you reconnect.')) return;
+    try {
+      await jsonFetch<{ ok: true }>('/api/github/account', { method: 'DELETE' });
+      setDevice(null);
+      setGhError(null);
+      await loadGithubStatus();
+      await loadStatus();
+    } catch (e) {
+      setGhError((e as Error).message);
+    }
+  }
 
   async function onParse() {
     if (!prompt.trim()) return;
@@ -155,7 +265,12 @@ export function Assistant() {
     });
   }
 
-  const disabled = useMemo(() => status && !status.enabled, [status]);
+  const isCopilot = status?.provider === 'copilot';
+  const needsGithub = !!(isCopilot && status?.needsGithub);
+  const disabled = useMemo(
+    () => status && (!status.enabled || needsGithub),
+    [status, needsGithub]
+  );
 
   return (
     <section className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-slate-100">
@@ -171,7 +286,69 @@ export function Assistant() {
         </div>
       </div>
 
-      {disabled && (
+      {isCopilot && (
+        <div className="mb-4 rounded border border-slate-700 bg-slate-900 px-3 py-3 text-sm">
+          {gh?.connected ? (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-slate-200">
+                Connected to GitHub as{' '}
+                <span className="font-medium">{gh.account?.githubLogin ?? '…'}</span>
+                <span className="ml-2 text-xs text-slate-400">
+                  (Copilot provider — your GitHub Copilot entitlement powers this assistant)
+                </span>
+              </div>
+              <button
+                onClick={() => void onDisconnectGithub()}
+                className="rounded border border-slate-600 px-3 py-1 text-xs hover:bg-slate-800"
+              >
+                Disconnect
+              </button>
+            </div>
+          ) : device ? (
+            <div className="space-y-2">
+              <p className="text-slate-200">
+                Visit{' '}
+                <a
+                  href={device.verificationUri}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-blue-400 underline"
+                >
+                  {device.verificationUri}
+                </a>{' '}
+                and enter this code:
+              </p>
+              <div className="font-mono text-2xl tracking-widest text-amber-300">
+                {device.userCode}
+              </div>
+              <p className="text-xs text-slate-400">
+                Waiting for you to authorize… This page will update automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="flex items-center justify-between gap-3">
+              <div className="text-slate-200">
+                Connect your GitHub account to enable the assistant. This uses your GitHub
+                Copilot entitlement — no separate API key needed.
+              </div>
+              <button
+                onClick={() => void onConnectGithub()}
+                disabled={connecting}
+                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+              >
+                {connecting ? 'Starting…' : 'Connect GitHub'}
+              </button>
+            </div>
+          )}
+          {ghError && (
+            <div className="mt-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">
+              {ghError}
+            </div>
+          )}
+        </div>
+      )}
+
+      {status && !status.enabled && !isCopilot && (
         <div className="mb-4 rounded border border-amber-700 bg-amber-950 px-3 py-2 text-sm text-amber-200">
           AI is disabled on this server. Set <code>HOME_OS_AI_PROVIDER</code> (and a key for
           OpenAI) to enable it.
@@ -184,9 +361,11 @@ export function Assistant() {
           onChange={(e) => setPrompt(e.target.value)}
           rows={3}
           placeholder={
-            disabled
-              ? 'AI is currently disabled.'
-              : 'e.g. "add milk to the shared todo list" or "import recipe https://example.com/cookie"'
+            needsGithub
+              ? 'Connect GitHub above to enable the assistant.'
+              : disabled
+                ? 'AI is currently disabled.'
+                : 'e.g. "add milk to the shared todo list" or "import recipe https://example.com/cookie"'
           }
           disabled={!!disabled}
           className="w-full resize-y rounded border border-slate-700 bg-slate-900 p-2 text-sm focus:border-blue-500 focus:outline-none disabled:opacity-60"

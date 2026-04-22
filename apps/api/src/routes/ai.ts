@@ -5,12 +5,14 @@ import { desc, eq } from 'drizzle-orm';
 import { schema } from '@home-os/db';
 import {
   AiDisabledError,
+  CopilotNoTokenError,
   ToolCall,
   createProvider,
   type AiProvider,
 } from '@home-os/ai';
 import { requireUser } from '../auth/middleware.js';
 import { executeToolCall, type ToolOutcome } from '../ai/execute.js';
+import { getGithubAccountPublic, makeGithubTokenLookup } from '../github/accounts.js';
 
 const MAX_PROMPT = 2000;
 const PARSE_BUCKET_MAX = 8;
@@ -56,11 +58,25 @@ export async function registerAiRoutes(app: FastifyInstance) {
       baseUrl: env.HOME_OS_OPENAI_BASE_URL,
       fetchImpl: app.deps.fetchImpl,
     },
+    copilot: {
+      getGithubToken: makeGithubTokenLookup(env, db),
+      model: env.HOME_OS_COPILOT_MODEL,
+      baseUrl: env.HOME_OS_COPILOT_BASE_URL,
+      fetchImpl: app.deps.fetchImpl,
+    },
   });
   app.decorate('aiProvider', provider);
 
-  app.get('/api/ai/status', { preHandler: auth }, async (_req, reply) => {
-    return reply.send({ provider: provider.name, enabled: provider.enabled });
+  app.get('/api/ai/status', { preHandler: auth }, async (req, reply) => {
+    // For Copilot, report whether *this user* has a GitHub connection so the
+    // UI can show "Connect GitHub" instead of a generic disabled state.
+    const needsGithub =
+      provider.name === 'copilot' && !getGithubAccountPublic(db, req.user!.id);
+    return reply.send({
+      provider: provider.name,
+      enabled: provider.enabled,
+      needsGithub,
+    });
   });
 
   app.post('/api/ai/parse', { preHandler: auth }, async (req, reply) => {
@@ -84,6 +100,9 @@ export async function registerAiRoutes(app: FastifyInstance) {
     } catch (err) {
       if (err instanceof AiDisabledError) {
         return reply.code(503).send({ error: 'ai_disabled' });
+      }
+      if (err instanceof CopilotNoTokenError) {
+        return reply.code(403).send({ error: 'github_not_connected' });
       }
       req.log.warn({ err }, 'ai parse failed');
       return reply.code(502).send({ error: 'provider_error', message: (err as Error).message });

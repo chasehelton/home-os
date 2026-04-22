@@ -20,11 +20,24 @@ const EnvSchema = z.object({
     .default('http://localhost:4000/auth/google/callback'),
   HOME_OS_ALLOWED_EMAILS: z.string().default(''),
 
-  HOME_OS_AI_PROVIDER: z.string().default('disabled'),
-  // Phase 9 — OpenAI adapter. All optional; only used when AI_PROVIDER=openai.
+  // Phase 9 — AI assistant.
+  //   'copilot' (default): GitHub Copilot using per-user GitHub OAuth device-flow
+  //   'openai' : OpenAI Chat Completions
+  //   'mock'   : deterministic local provider for tests/dev
+  //   'disabled'
+  HOME_OS_AI_PROVIDER: z.string().default('copilot'),
+  // OpenAI adapter (only used when AI_PROVIDER=openai).
   HOME_OS_OPENAI_API_KEY: z.string().optional(),
   HOME_OS_OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   HOME_OS_OPENAI_BASE_URL: z.string().url().default('https://api.openai.com'),
+  // GitHub Copilot adapter.
+  //   CLIENT_ID defaults to the VS Code device-flow client, which is publicly
+  //   known and the same one used by the official Copilot Chat extension.
+  //   Override only if you've registered your own GitHub OAuth/Copilot app.
+  //   MODEL defaults to 'gpt-4o-mini' which the Copilot backend exposes.
+  HOME_OS_GITHUB_CLIENT_ID: z.string().default('Iv1.b507a08c87ecfe98'),
+  HOME_OS_COPILOT_MODEL: z.string().default('gpt-4o-mini'),
+  HOME_OS_COPILOT_BASE_URL: z.string().url().default('https://api.githubcopilot.com'),
   // Phase 5: 32-byte key (hex or base64) used to encrypt Google refresh
   // tokens at rest. REQUIRED in production; derived from the session secret
   // in dev/test for ergonomics.

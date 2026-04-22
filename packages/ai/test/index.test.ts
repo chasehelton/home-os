@@ -19,8 +19,20 @@ describe('createProvider', () => {
     expect(p).toBeInstanceOf(DisabledProvider);
   });
 
+  it('returns copilot provider when token lookup is wired', () => {
+    const p = createProvider({
+      kind: 'copilot',
+      copilot: { getGithubToken: () => null },
+    });
+    expect(p.name).toBe('copilot');
+    expect(p.enabled).toBe(true);
+  });
+
+  it('falls back to disabled when copilot has no token provider', () => {
+    expect(createProvider({ kind: 'copilot' })).toBeInstanceOf(DisabledProvider);
+  });
+
   it('throws for unknown or unimplemented providers', () => {
-    expect(() => createProvider({ kind: 'copilot' })).toThrow();
     expect(() => createProvider({ kind: 'anthropic' })).toThrow();
     expect(() => createProvider({ kind: 'nope' })).toThrow();
   });

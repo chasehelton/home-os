@@ -113,7 +113,7 @@ Store encrypted OAuth tokens (libsodium sealed box with a key in `.env` / system
 | Frontend | React + Vite + TS + Tailwind (one web app for kiosk + mobile, responsive + a kiosk layout mode) |
 | Auth | Google OAuth (allowlist) + session cookie; network = Tailscale |
 | Calendar | **Phase 1: read-only mirror**; Phase 2: write for non-recurring user-owned events; recurring/attendees deferred |
-| AI provider | Abstraction in `packages/ai`. Adapters: Copilot SDK (if viable for this use), OpenAI, Anthropic. App must be fully functional with AI disabled. |
+| AI provider | Abstraction in `packages/ai`. Default adapter: **GitHub Copilot** (per-user OAuth device-flow → encrypted GH token at rest → short-lived Copilot session token, never persisted). Fallbacks: OpenAI, Mock, Disabled. App must be fully functional with AI disabled. |
 | Mobile | PWA (installable, offline-capable). Assume **no reliable iOS background** — server owns sync/reminders/retries. |
 | Deployment | Docker Compose for services + native systemd for Electron |
 | Backups | Litestream continuous replica to S3/B2 + nightly sqlite `.backup` snapshot + **rehearsed restore drill before "production"** |
@@ -258,13 +258,15 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - No-keyboard auth-recovery flow (QR code to mobile to re-auth).
 
 ### Phase 9 — AI assistant ✅
-- `packages/ai`: stable `parseIntent(prompt, ctx) → ToolCall[]` interface with tool-schema source of truth (zod + JSON-schema for function calling). Providers: `DisabledProvider` (default), `MockProvider` (deterministic rules for dev/tests), `OpenAIProvider` (fetch-based, no SDK dep, injectable `fetchImpl`). Copilot-SDK + Anthropic adapters intentionally stubbed; throw "not yet implemented" until a follow-up lands them.
+- `packages/ai`: stable `parseIntent(prompt, ctx) → ToolCall[]` interface with tool-schema source of truth (zod + JSON-schema for function calling). Providers: `DisabledProvider`, `MockProvider` (deterministic rules for dev/tests), `OpenAIProvider` (fetch-based, no SDK dep), and **`CopilotProvider`** (default — uses the OpenAI-compatible GitHub Copilot chat-completions endpoint).
+- **Copilot is the primary AI provider.** Each user connects their own GitHub account via OAuth **device flow** (client ID configurable, defaults to the public VS Code Copilot device-flow client). The long-lived GitHub access token is stored encrypted at rest in a new `github_accounts` table (AES-256-GCM, same envelope as Google refresh tokens). The provider exchanges that token for a short-lived Copilot session token (`api.github.com/copilot_internal/v2/token`) and caches it in memory until ~1 min before expiry. No Copilot secret ever touches disk. App remains fully functional with AI disabled or with users who haven't connected GitHub yet (returns `403 github_not_connected` instead of failing hard).
 - Tools shipped this phase: `create_todo`, `create_event`, `import_recipe`. `plan_meals_week` deferred (schema intentionally omitted from the active `ToolCall` union).
-- REST: `GET /api/ai/status`, `POST /api/ai/parse` (preview, never mutates), `POST /api/ai/execute` (re-validates each ToolCall + dispatches via `apps/api/src/ai/execute.ts` which reuses todos/calendar/recipes domain code and existing scope/ownership enforcement). `GET /api/ai/transcripts` for recent history. Per-user token-bucket rate limit (8/min, scoped to the Fastify instance).
-- New `ai_transcripts` table (migration `0006_burly_the_executioner.sql`) stores prompt + toolCallsJson + outcomeJson per interaction.
-- Env: `HOME_OS_AI_PROVIDER` (`disabled`/`mock`/`openai`), `HOME_OS_OPENAI_API_KEY`, `HOME_OS_OPENAI_MODEL` (default `gpt-4o-mini`), `HOME_OS_OPENAI_BASE_URL`. Missing key degrades to disabled rather than crashing at boot — app is fully functional with AI disabled.
-- Web: new **Assistant** tab with a preview → confirm → execute flow, editable proposal cards, outcome list, and recent-transcripts panel.
-- 14 new tests (MockProvider, OpenAIProvider with stubbed fetch, createProvider matrix) + 9 new API integration tests (disabled/mock flows, validation, rate limit, transcript scoping, calendar dispatch with and without a writable primary).
+- REST: `GET /api/ai/status` (reports `provider`/`enabled`/`needsGithub` per user), `POST /api/ai/parse` (preview, never mutates), `POST /api/ai/execute` (re-validates each ToolCall + dispatches via `apps/api/src/ai/execute.ts` which reuses todos/calendar/recipes domain code and existing scope/ownership enforcement), `GET /api/ai/transcripts`. Per-user token-bucket rate limit (8/min, scoped to the Fastify instance).
+- GitHub connection REST: `GET /api/github/status`, `POST /api/github/device/start`, `POST /api/github/device/poll`, `DELETE /api/github/account`. Device codes held in a process-local map (short-lived, single-use).
+- New tables: `ai_transcripts` (migration `0006_burly_the_executioner.sql`), `github_accounts` (migration `0007_curious_dakota_north.sql`, unique on `user_id`).
+- Env: `HOME_OS_AI_PROVIDER` (default `copilot`; also `disabled`/`mock`/`openai`), `HOME_OS_GITHUB_CLIENT_ID` (default: VS Code Copilot device-flow client), `HOME_OS_COPILOT_MODEL` (default `gpt-4o-mini`), `HOME_OS_COPILOT_BASE_URL`. OpenAI vars still present as a fallback provider.
+- Web: new **Assistant** tab with provider-aware connection card (Connect GitHub → device code flow with auto-open of `github.com/login/device` and background polling), preview → confirm → execute flow, editable proposal cards, outcome list, and recent-transcripts panel.
+- 22 tests in `packages/ai` (MockProvider, OpenAIProvider, **CopilotProvider** incl. session-token cache + 401 invalidation + GH-token rotation, createProvider matrix) + 10 AI API integration tests + 7 new GitHub device-flow integration tests (status, start, poll pending→ok with encrypted token persistence, disconnect).
 
 ### Phase 10 — Deployment & Hardening
 - `infra/docker`: multi-stage Dockerfiles; `linux/arm64` images built in CI.
@@ -293,7 +295,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 |---|---|
 | Bad migration corrupts household data | Pre-migration snapshot; restore drill; destructive-migration gate |
 | Google sync edge cases (recurring, deletes, 410) | Scope MVP to non-recurring write; handle 410 with full resync; store etag/status/recurring fields up front |
-| Copilot SDK not usable for this app class | Provider abstraction from day 1; app works without AI |
+| Copilot API access model changes (endpoint is documented-but-stable) | Provider abstraction swaps in OpenAI/Anthropic/Mock without touching routes; app works without AI |
 | SD card corruption / slow IO | High-endurance card; tmpfs for logs/caches; WAL+synchronous=NORMAL; Litestream + nightly snapshot; one-command reprovision script; USB-SSD upgrade path |
 | Kiosk becomes unrecoverable | Auto-relaunch; QR-to-mobile reauth; cleaning mode; crash screen |
 | iOS PWA limits break reminders | Server owns scheduling and retries |
