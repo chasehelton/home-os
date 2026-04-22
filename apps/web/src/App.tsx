@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { TodoList } from './components/TodoList';
 import { Recipes } from './components/Recipes';
 import { MealPlan } from './components/MealPlan';
+import { Settings } from './components/Settings';
 
 interface Me {
   id: string;
@@ -10,12 +11,16 @@ interface Me {
   pictureUrl: string | null;
 }
 
-type Tab = 'todos' | 'recipes' | 'meals';
+type Tab = 'todos' | 'recipes' | 'meals' | 'settings';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<Tab>('todos');
+  const [tab, setTab] = useState<Tab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get('tab');
+    return t === 'recipes' || t === 'meals' || t === 'settings' ? t : 'todos';
+  });
 
   async function refresh() {
     setLoading(true);
@@ -60,7 +65,7 @@ export function App() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">home-os</h1>
           <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(['todos', 'recipes', 'meals'] as Tab[]).map((t) => (
+            {(['todos', 'recipes', 'meals', 'settings'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -95,8 +100,10 @@ export function App() {
         <TodoList currentUserId={me.id} />
       ) : tab === 'recipes' ? (
         <Recipes />
-      ) : (
+      ) : tab === 'meals' ? (
         <MealPlan />
+      ) : (
+        <Settings />
       )}
     </main>
   );

@@ -15,6 +15,7 @@ export function makeTestEnv(over: Partial<Env> = {}): Env {
     HOME_OS_GOOGLE_REDIRECT_URI: 'http://localhost:4000/auth/google/callback',
     HOME_OS_ALLOWED_EMAILS: '',
     HOME_OS_AI_PROVIDER: 'disabled',
+    HOME_OS_CALENDAR_SYNC_INTERVAL_MS: 5 * 60 * 1000,
     NODE_ENV: 'test' as const,
     ...over,
   };

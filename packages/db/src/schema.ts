@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, integer, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // ---------------------------------------------------------------------------
 // Phase 0 / 1 tables. Additional tables (recipes, meal plans, calendar, etc.)
@@ -112,5 +112,121 @@ export const mealPlanEntries = sqliteTable(
   },
   (t) => ({
     dateSlotIdx: index('meal_plan_entries_date_slot_idx').on(t.date, t.slot),
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Phase 5 — Calendar READ sync (Google).
+//
+// Each user connects their own Google account; tokens are encrypted at rest
+// with the AES-GCM key configured via HOME_OS_TOKEN_KEY. Only the refresh
+// token is persisted — access tokens are fetched on demand per sync cycle.
+// Events are a read-only mirror: we ask Google to expand recurring series
+// into individual instances (singleEvents=true), and store `recurring_event_id`
+// + `original_start_time` for display grouping.
+// ---------------------------------------------------------------------------
+
+export const calendarAccounts = sqliteTable(
+  'calendar_accounts',
+  {
+    id: text('id').primaryKey(),
+    userId: text('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    googleSub: text('google_sub').notNull(),
+    email: text('email').notNull(),
+    refreshTokenEnc: text('refresh_token_enc'),
+    scopes: text('scopes').notNull(),
+    status: text('status', { enum: ['active', 'disabled'] }).notNull().default('active'),
+    lastError: text('last_error'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    bySub: uniqueIndex('calendar_accounts_google_sub_idx').on(t.googleSub),
+    byUserStatus: index('calendar_accounts_user_status_idx').on(t.userId, t.status),
+  })
+);
+
+export const calendarLists = sqliteTable(
+  'calendar_lists',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('account_id')
+      .notNull()
+      .references(() => calendarAccounts.id, { onDelete: 'cascade' }),
+    googleCalendarId: text('google_calendar_id').notNull(),
+    summary: text('summary').notNull(),
+    description: text('description'),
+    colorId: text('color_id'),
+    backgroundColor: text('background_color'),
+    foregroundColor: text('foreground_color'),
+    timeZone: text('time_zone'),
+    primary: integer('primary', { mode: 'boolean' }).notNull().default(false),
+    selected: integer('selected', { mode: 'boolean' }).notNull().default(true),
+    syncToken: text('sync_token'),
+    lastFullSyncAt: text('last_full_sync_at'),
+    lastIncrementalSyncAt: text('last_incremental_sync_at'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    byAccountCal: uniqueIndex('calendar_lists_account_google_idx').on(
+      t.accountId,
+      t.googleCalendarId
+    ),
+    byAccount: index('calendar_lists_account_idx').on(t.accountId),
+  })
+);
+
+// Store both "timed" (start_at / end_at, UTC ISO) and "all-day" (start_date /
+// end_date_exclusive, YYYY-MM-DD) shapes. Renderers decide which to use based
+// on `all_day`. This preserves the original Google shape and avoids DST bugs.
+export const calendarEvents = sqliteTable(
+  'calendar_events',
+  {
+    id: text('id').primaryKey(),
+    calendarListId: text('calendar_list_id')
+      .notNull()
+      .references(() => calendarLists.id, { onDelete: 'cascade' }),
+    googleEventId: text('google_event_id').notNull(),
+    etag: text('etag'),
+    status: text('status', { enum: ['confirmed', 'tentative', 'cancelled'] }).notNull(),
+    allDay: integer('all_day', { mode: 'boolean' }).notNull().default(false),
+    startAt: text('start_at'),
+    endAt: text('end_at'),
+    startDate: text('start_date'),
+    endDateExclusive: text('end_date_exclusive'),
+    startTz: text('start_tz'),
+    endTz: text('end_tz'),
+    title: text('title'),
+    description: text('description'),
+    location: text('location'),
+    htmlLink: text('html_link'),
+    recurringEventId: text('recurring_event_id'),
+    originalStartTime: text('original_start_time'),
+    googleUpdatedAt: text('google_updated_at'),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+    updatedAt: text('updated_at')
+      .notNull()
+      .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),
+  },
+  (t) => ({
+    byListEvent: uniqueIndex('calendar_events_list_event_idx').on(
+      t.calendarListId,
+      t.googleEventId
+    ),
+    byListStart: index('calendar_events_list_start_idx').on(t.calendarListId, t.startAt),
+    byListDate: index('calendar_events_list_date_idx').on(t.calendarListId, t.startDate),
   })
 );
