@@ -72,8 +72,10 @@ COPY --from=build /app /app
 COPY --from=build /repo/packages/db/migrations /app/node_modules/@home-os/db/migrations
 
 # Non-root; uid/gid 1000 matches the provision script's `home-os` user so
-# bind mounts Just Work.
-RUN groupadd --gid 1000 home-os \
+# bind mounts Just Work. The bookworm base ships a `node` user at uid 1000
+# already, so drop it first.
+RUN userdel -r node 2>/dev/null || true \
+ && groupadd --gid 1000 home-os \
  && useradd  --uid 1000 --gid 1000 --home /app --shell /usr/sbin/nologin home-os \
  && mkdir -p /var/lib/home-os && chown -R 1000:1000 /var/lib/home-os /app
 USER 1000:1000
