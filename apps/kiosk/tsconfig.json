@@ -5,7 +5,10 @@
     "rootDir": "src",
     "module": "CommonJS",
     "moduleResolution": "Node",
-    "composite": true
+    "composite": true,
+    "lib": ["ES2022", "DOM"],
+    "types": ["node"]
   },
-  "include": ["src/**/*"]
+  "include": ["src/**/*.ts"],
+  "exclude": ["src/**/*.html"]
 }

@@ -1,0 +1,37 @@
+# EXAMPLE systemd unit — not yet wired into CI or provisioning. The real
+# Pi deployment wiring (display session handling, Tailscale-up, etc.) lands
+# in Phase 10. This file is kept here so ops has a starting point.
+#
+# Install:
+#   sudo cp home-os-kiosk.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now home-os-kiosk.service
+#
+# Assumptions (must adjust for your Pi setup):
+#   - DISPLAY=:0 and a running graphical session owned by the `pi` user.
+#   - home-os checked out at /opt/home-os, built with `pnpm -r build`.
+#   - Electron invoked via the `electron` binary in node_modules/.bin.
+[Unit]
+Description=home-os kiosk (Electron fullscreen UI)
+# NOTE: graphical.target != "the desktop is actually painting". On Wayland
+# or a bespoke session you likely need a user-service under
+# graphical-session.target instead. Revisit in Phase 10.
+After=graphical.target network-online.target
+Wants=graphical.target network-online.target
+
+[Service]
+Type=simple
+User=pi
+WorkingDirectory=/opt/home-os/apps/kiosk
+Environment=DISPLAY=:0
+Environment=HOME_OS_KIOSK_URL=http://localhost:8080
+Environment=HOME_OS_KIOSK_HEALTH_URL=http://localhost:8080/health/live
+ExecStart=/opt/home-os/node_modules/.bin/electron /opt/home-os/apps/kiosk/dist/main.js
+Restart=always
+RestartSec=3
+# Don't spam restarts if something is fundamentally wrong.
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Install]
+WantedBy=graphical.target

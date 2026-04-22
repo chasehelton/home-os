@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>home-os kiosk — offline</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background: #0f172a;
+        color: #e2e8f0;
+        font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      }
+      main {
+        display: flex;
+        height: 100%;
+        align-items: center;
+        justify-content: center;
+        padding: 2rem;
+        gap: 3rem;
+        flex-wrap: wrap;
+      }
+      .card {
+        max-width: 36rem;
+      }
+      h1 {
+        font-size: 2.5rem;
+        margin: 0 0 1rem 0;
+      }
+      p {
+        font-size: 1.1rem;
+        line-height: 1.5;
+        color: #94a3b8;
+      }
+      code {
+        color: #e2e8f0;
+        background: #1e293b;
+        padding: 0 0.25rem;
+        border-radius: 3px;
+      }
+      .qr {
+        background: white;
+        padding: 1rem;
+        border-radius: 8px;
+      }
+      .qr img {
+        display: block;
+        width: 16rem;
+        height: 16rem;
+        image-rendering: pixelated;
+      }
+      .caption {
+        margin-top: 0.75rem;
+        font-size: 0.9rem;
+        text-align: center;
+        color: #94a3b8;
+        word-break: break-all;
+      }
+      button {
+        margin-top: 1.5rem;
+        font-size: 1rem;
+        padding: 0.75rem 1.5rem;
+        background: #2563eb;
+        color: white;
+        border: 0;
+        border-radius: 6px;
+        cursor: pointer;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <div class="card">
+        <h1>Can't reach the home server</h1>
+        <p id="message">
+          The kiosk couldn't load the web app. This usually means the server
+          is starting up or the network is down.
+        </p>
+        <p>
+          Scan the QR with a phone to open the same URL from another device,
+          or press the button to retry.
+        </p>
+        <button onclick="location.reload()">Retry now</button>
+      </div>
+      <div>
+        <div class="qr" id="qrHost"></div>
+        <div class="caption" id="qrCaption"></div>
+      </div>
+    </main>
+    <!-- Inlined qrcode-generator. Generated at build-time via `scripts/
+         vendor-qrcode.mjs` to keep the crash screen self-contained (no
+         network needed to render the QR). -->
+    <script src="./vendor/qrcode-generator.js"></script>
+    <script>
+      (function () {
+        var p = new URLSearchParams(location.search);
+        var url = p.get('qr') || p.get('url') || 'http://localhost:5173';
+        var caption = document.getElementById('qrCaption');
+        caption.textContent = url;
+        var code = p.get('code');
+        var msg = p.get('msg');
+        if (code || msg) {
+          var m = document.getElementById('message');
+          m.innerHTML +=
+            '<br><br><code>' +
+            (msg || 'error') +
+            (code ? ' (' + code + ')' : '') +
+            '</code>';
+        }
+        try {
+          var qr = qrcode(0, 'M');
+          qr.addData(url);
+          qr.make();
+          document.getElementById('qrHost').innerHTML = qr.createImgTag(8, 16);
+        } catch (e) {
+          document.getElementById('qrHost').textContent = '[QR unavailable]';
+        }
+      })();
+    </script>
+  </body>
+</html>

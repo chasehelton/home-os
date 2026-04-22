@@ -2,15 +2,22 @@
   "name": "@home-os/kiosk",
   "version": "0.0.1",
   "private": true,
-  "type": "module",
-  "main": "./src/main.cjs",
+  "type": "commonjs",
+  "main": "./dist/main.js",
   "scripts": {
-    "build": "echo 'Electron packaging lands in Phase 8' && exit 0",
-    "dev": "echo 'Kiosk dev mode lands in Phase 8. Web UI is at http://localhost:5173'",
+    "build": "tsc && node scripts/copy-assets.mjs",
+    "dev": "pnpm build && electron dist/main.js",
+    "start": "electron dist/main.js",
     "typecheck": "tsc --noEmit",
-    "test": "echo 'no kiosk tests yet'"
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
-    "typescript": "^5.7.3"
+    "@types/node": "^22.10.5",
+    "electron": "^32.2.0",
+    "typescript": "^5.7.3",
+    "vitest": "^2.1.8"
   }
 }
