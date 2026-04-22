@@ -18,13 +18,21 @@ const SECRET_KEYS = new Set([
   'sid',
   'token',
   'accessToken',
+  'access_token',
   'refreshToken',
+  'refresh_token',
   'idToken',
+  'id_token',
   'codeVerifier',
+  'code_verifier',
   'state',
   'nonce',
   'password',
   'secret',
+  'accessTokenEnc',
+  'access_token_enc',
+  'refreshTokenEnc',
+  'refresh_token_enc',
 ]);
 
 /** Recursively redact secret-shaped fields before they ever land in the DB. */

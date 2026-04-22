@@ -10,17 +10,25 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerTodoRoutes } from './routes/todos.js';
 import { registerRecipeRoutes } from './routes/recipes.js';
 import { registerMealPlanRoutes } from './routes/mealplan.js';
+import { registerCalendarRoutes } from './routes/calendar.js';
+import { startCalendarWorker, type CalendarWorker } from './calendar/worker.js';
 
 export interface AppDeps {
   env: Env;
   db: DB;
   sqlite: Database.Database;
   dataDir: string;
+  /** Optional fetch override; tests inject a mock here. */
+  fetchImpl?: typeof fetch;
 }
 
 export interface BuildAppOptions {
   env?: Env;
   dataDir?: string;
+  /** Optional fetch override; tests inject a mock here. */
+  fetchImpl?: typeof fetch;
+  /** If true, skip starting the background calendar worker. Default off in tests. */
+  startWorkers?: boolean;
 }
 
 export async function buildApp(options: BuildAppOptions = {}): Promise<{
@@ -45,7 +53,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
     credentials: true,
   });
 
-  const deps: AppDeps = { env, db, sqlite, dataDir };
+  const deps: AppDeps = { env, db, sqlite, dataDir, fetchImpl: options.fetchImpl };
   app.decorate('deps', deps);
 
   await registerHealthRoutes(app);
@@ -53,8 +61,24 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   await registerTodoRoutes(app);
   await registerRecipeRoutes(app);
   await registerMealPlanRoutes(app);
+  await registerCalendarRoutes(app);
+
+  const shouldStartWorkers = options.startWorkers ?? env.NODE_ENV !== 'test';
+  let worker: CalendarWorker | null = null;
+  if (shouldStartWorkers) {
+    worker = startCalendarWorker({
+      db,
+      cfg: app.calendarSyncCfg,
+      intervalMs: env.HOME_OS_CALENDAR_SYNC_INTERVAL_MS,
+      logger: {
+        info: (msg, obj) => app.log.info(obj ?? {}, msg),
+        warn: (msg, obj) => app.log.warn(obj ?? {}, msg),
+      },
+    });
+  }
 
   app.addHook('onClose', async () => {
+    worker?.stop();
     sqlite.close();
   });
 

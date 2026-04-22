@@ -21,6 +21,16 @@ const EnvSchema = z.object({
   HOME_OS_ALLOWED_EMAILS: z.string().default(''),
 
   HOME_OS_AI_PROVIDER: z.string().default('disabled'),
+  // Phase 5: 32-byte key (hex or base64) used to encrypt Google refresh
+  // tokens at rest. REQUIRED in production; derived from the session secret
+  // in dev/test for ergonomics.
+  HOME_OS_TOKEN_KEY: z.string().optional(),
+  // How often the background sync worker fires. Default 5 min.
+  HOME_OS_CALENDAR_SYNC_INTERVAL_MS: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(5 * 60 * 1000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
 });
 

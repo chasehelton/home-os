@@ -4,9 +4,9 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ---
 
-## 🚦 Current Status (2026-04-21)
+## 🚦 Current Status
 
-**Up next: Phase 5 — Calendar READ sync.** Branch `main`; create `phase-5-calendar-read` after P4 PR merge.
+**Up next: Phase 6 — Calendar UI.** Branch `main`; create `phase-6-calendar-ui` after P5 PR merge.
 
 | Phase | Status | PR |
 | --- | --- | --- |
@@ -14,16 +14,16 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 | P1 Identity & Ownership | ✅ merged | #1 |
 | P2 Todos | ✅ merged | #2 |
 | P3 Recipes (defuddle markdown) | ✅ merged | #3 |
-| P4 Meal Planning | ✅ PR open | — |
-| **P5 Calendar READ** | ⏳ **next** | — |
-| P6 Calendar UI | pending | — |
+| P4 Meal Planning | ✅ merged | #5 |
+| P5 Calendar READ | ✅ PR open | — |
+| **P6 Calendar UI** | ⏳ **next** | — |
 | P7 Calendar WRITE | pending | — |
 | P8 Kiosk shell | pending | — |
 | P9 AI assistant | pending | — |
 | P10 Deploy & hardening | pending | — |
 | P11 Reminders | pending | — |
 
-**Repo health:** 45/45 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 66/66 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
