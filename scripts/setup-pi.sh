@@ -133,6 +133,8 @@ echo "==> configuring tailscale serve"
 tailscale serve reset >/dev/null 2>&1 || true
 tailscale serve --bg --https=443 http://127.0.0.1:4000
 
+TAILNET_HOST="$(tailscale status --json 2>/dev/null | python3 -c 'import json,sys;print(json.load(sys.stdin)["Self"]["DNSName"].rstrip("."))' 2>/dev/null || echo '<tailnet-host>')"
+
 cat <<EOF
 
 ==> done.
@@ -140,7 +142,7 @@ cat <<EOF
   Service:    systemctl status home-os-api
   Logs:       journalctl -u home-os-api -f
   Tailscale:  tailscale serve status
-  URL:        $(tailscale status --json 2>/dev/null | node -e 'const j=JSON.parse(require("fs").readFileSync(0,"utf8"));console.log("https://"+j.Self.DNSName.replace(/\.$/,""))' 2>/dev/null || echo https://<tailnet-host>)
+  URL:        https://${TAILNET_HOST}
 
   Push a commit to \`main\` and the CD workflow will deploy it here.
 

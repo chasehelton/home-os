@@ -34,7 +34,7 @@ Environment=NODE_ENV=production
 # Production migration gate: we run migrate-safe.js from the deploy script,
 # so the server itself should NOT auto-migrate.
 Environment=HOME_OS_AUTO_MIGRATE=false
-ExecStart=/usr/bin/node __HOME_OS_REPO__/apps/api/dist/server.js
+ExecStart=/usr/bin/node __HOME_OS_REPO__/apps/api/dist/src/server.js
 Restart=on-failure
 RestartSec=5
 TimeoutStopSec=15
