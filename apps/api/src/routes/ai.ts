@@ -61,8 +61,6 @@ export async function registerAiRoutes(app: FastifyInstance) {
     copilot: {
       getGithubToken: makeGithubTokenLookup(env, db),
       model: env.HOME_OS_COPILOT_MODEL,
-      baseUrl: env.HOME_OS_COPILOT_BASE_URL,
-      fetchImpl: app.deps.fetchImpl,
     },
   });
   app.decorate('aiProvider', provider);

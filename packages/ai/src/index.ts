@@ -26,8 +26,6 @@ export interface CreateProviderOptions {
   copilot?: {
     getGithubToken?: GithubTokenProvider;
     model?: string;
-    baseUrl?: string;
-    fetchImpl?: typeof fetch;
   };
 }
 
@@ -64,8 +62,6 @@ export function createProvider(opts: CreateProviderOptions): AiProvider {
       return new CopilotProvider({
         getGithubToken,
         model: opts.copilot?.model,
-        baseUrl: opts.copilot?.baseUrl,
-        fetchImpl: opts.copilot?.fetchImpl,
       });
     }
     case 'anthropic':

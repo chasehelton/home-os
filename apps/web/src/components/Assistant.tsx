@@ -294,7 +294,7 @@ export function Assistant() {
                 Connected to GitHub as{' '}
                 <span className="font-medium">{gh.account?.githubLogin ?? '…'}</span>
                 <span className="ml-2 text-xs text-slate-400">
-                  (via GitHub Models — your GitHub token authorizes model access)
+                  (via GitHub Copilot — your GitHub token authorizes Copilot access)
                 </span>
               </div>
               <button
@@ -328,8 +328,8 @@ export function Assistant() {
           ) : (
             <div className="flex items-center justify-between gap-3">
               <div className="text-slate-200">
-                Connect your GitHub account to enable the assistant. The assistant runs via
-                GitHub Models using your GitHub token — no separate API key needed.
+                Connect your GitHub account to enable the assistant. The assistant uses
+                GitHub Copilot via the official SDK — no separate API key needed.
               </div>
               <button
                 onClick={() => void onConnectGithub()}
