@@ -6,7 +6,7 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ## 🚦 Current Status
 
-**Up next: Phase 8 — Kiosk shell.** Branch `main`; create `phase-8-kiosk` after P7 PR merge.
+**Up next: Phase 9 — AI assistant.** Branch `main`; create `phase-9-ai` after P8 PR merge.
 
 | Phase | Status | PR |
 | --- | --- | --- |
@@ -17,13 +17,13 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 | P4 Meal Planning | ✅ merged | #5 |
 | P5 Calendar READ | ✅ merged | #6 |
 | P6 Calendar UI | ✅ merged | #7 |
-| P7 Calendar WRITE | ✅ PR open | — |
-| **P8 Kiosk shell** | ⏳ **next** | — |
-| P9 AI assistant | pending | — |
+| P7 Calendar WRITE | ✅ merged | #8 |
+| P8 Kiosk shell | ✅ PR open | — |
+| **P9 AI assistant** | ⏳ **next** | — |
 | P10 Deploy & hardening | pending | — |
 | P11 Reminders | pending | — |
 
-**Repo health:** 96/96 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 108/108 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
