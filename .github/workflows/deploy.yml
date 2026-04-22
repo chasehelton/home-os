@@ -56,12 +56,32 @@ jobs:
           chmod 700 ~/.ssh
           echo "${{ secrets.PI_SSH_PRIVATE_KEY }}" > ~/.ssh/pi
           chmod 600 ~/.ssh/pi
-          ssh-keyscan -T 10 -H "${{ secrets.PI_HOST }}" >> ~/.ssh/known_hosts 2>/dev/null || true
 
       - name: Deploy
         env:
           PI_HOST: ${{ secrets.PI_HOST }}
           PI_USER: ${{ secrets.PI_USER }}
         run: |
-          ssh -i ~/.ssh/pi -o StrictHostKeyChecking=accept-new "${PI_USER}@${PI_HOST}" \
-            'cd ~/repos/home-os && scripts/deploy.sh'
+          # Resolve PI_HOST to its tailnet 100.x IP via `tailscale ip`.
+          # The ephemeral runner's MagicDNS resolver isn't always reliable;
+          # the tailnet IP always works. PI_HOST may be a FQDN
+          # ("pi4.tailebbd07.ts.net") or a short name ("pi4") — strip any
+          # trailing suffix.
+          SHORT="${PI_HOST%%.*}"
+          for i in 1 2 3 4 5; do
+            PI_IP="$(tailscale ip -4 "$SHORT" 2>/dev/null | head -n1 || true)"
+            if [ -n "$PI_IP" ]; then break; fi
+            echo "tailscale ip: waiting for $SHORT to be visible on the tailnet (attempt $i)..."
+            sleep 3
+          done
+          if [ -z "$PI_IP" ]; then
+            echo "ERROR: could not resolve $SHORT on the tailnet." >&2
+            tailscale status >&2 || true
+            exit 1
+          fi
+          echo "Resolved $SHORT -> $PI_IP"
+          ssh -i ~/.ssh/pi \
+              -o StrictHostKeyChecking=accept-new \
+              -o UserKnownHostsFile=/dev/null \
+              "${PI_USER}@${PI_IP}" \
+              'cd ~/repos/home-os && scripts/deploy.sh'
