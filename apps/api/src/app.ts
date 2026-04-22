@@ -11,6 +11,7 @@ import { registerTodoRoutes } from './routes/todos.js';
 import { registerRecipeRoutes } from './routes/recipes.js';
 import { registerMealPlanRoutes } from './routes/mealplan.js';
 import { registerCalendarRoutes } from './routes/calendar.js';
+import { registerHouseholdRoutes } from './routes/household.js';
 import { startCalendarWorker, type CalendarWorker } from './calendar/worker.js';
 
 export interface AppDeps {
@@ -62,6 +63,7 @@ export async function buildApp(options: BuildAppOptions = {}): Promise<{
   await registerRecipeRoutes(app);
   await registerMealPlanRoutes(app);
   await registerCalendarRoutes(app);
+  await registerHouseholdRoutes(app);
 
   const shouldStartWorkers = options.startWorkers ?? env.NODE_ENV !== 'test';
   let worker: CalendarWorker | null = null;

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, or, sql as dsql } from 'drizzle-orm';
+import { and, eq, gt, lt, or, sql as dsql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import type { DB } from '@home-os/db';
 import { schema } from '@home-os/db';
@@ -456,18 +456,58 @@ export interface EventRow {
   originalStartTime: string | null;
 }
 
+export interface EventRowWithOwner extends EventRow {
+  ownerUserId: string;
+  ownerDisplayName: string;
+  ownerColor: string | null;
+}
+
+/**
+ * Build the `where` predicate for event-window overlap.
+ *
+ * Correctness subtlety: overlap, not start-contains. An event overlaps
+ * [from, to] iff `start < windowEnd` AND `end > windowStart`. For timed
+ * events we compare against `start_at` / `end_at`; for all-day events
+ * `start_date` / `end_date_exclusive`.
+ */
+function eventWindowOverlap(from: string, to: string) {
+  // 'to' is inclusive at the day granularity. Bump to the next-morning
+  // UTC boundary for timed comparison.
+  const windowStartIso = `${from}T00:00:00.000Z`;
+  const windowEndIso = `${to}T23:59:59.999Z`;
+  // For all-day, the exclusive end of the window is `to + 1 day`.
+  const dayPlus = addDays(to, 1);
+  return or(
+    and(
+      eq(schema.calendarEvents.allDay, true),
+      // all-day overlap: start_date < (to + 1 day) AND end_date_exclusive > from
+      lt(schema.calendarEvents.startDate, dayPlus),
+      gt(schema.calendarEvents.endDateExclusive, from)
+    ),
+    and(
+      eq(schema.calendarEvents.allDay, false),
+      lt(schema.calendarEvents.startAt, windowEndIso),
+      gt(schema.calendarEvents.endAt, windowStartIso)
+    )
+  );
+}
+
+function addDays(yyyymmdd: string, days: number): string {
+  const [y, m, d] = yyyymmdd.split('-').map(Number) as [number, number, number];
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + days);
+  const yy = dt.getUTCFullYear().toString().padStart(4, '0');
+  const mm = (dt.getUTCMonth() + 1).toString().padStart(2, '0');
+  const dd = dt.getUTCDate().toString().padStart(2, '0');
+  return `${yy}-${mm}-${dd}`;
+}
+
 export function listEventsForUserBetween(
   db: DB,
   userId: string,
   from: string,
   to: string
 ): EventRow[] {
-  // Window includes events whose (start, end) overlap the [from, to] date range.
-  // For all-day events compare on start_date; for timed events compare on start_at.
-  const fromIso = `${from}T00:00:00.000Z`;
-  // 'to' is inclusive; include the full day by bumping to the next morning UTC.
-  const toNextIso = `${to}T23:59:59.999Z`;
-
   return db
     .select({
       id: schema.calendarEvents.id,
@@ -501,23 +541,67 @@ export function listEventsForUserBetween(
       and(
         eq(schema.calendarAccounts.userId, userId),
         eq(schema.calendarLists.selected, true),
-        or(
-          and(
-            eq(schema.calendarEvents.allDay, true),
-            // all-day: start_date in window
-            gte(schema.calendarEvents.startDate, from),
-            lte(schema.calendarEvents.startDate, to)
-          ),
-          and(
-            eq(schema.calendarEvents.allDay, false),
-            gte(schema.calendarEvents.startAt, fromIso),
-            lte(schema.calendarEvents.startAt, toNextIso)
-          )
-        )
+        eventWindowOverlap(from, to)
       )
     )
     .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
     .all() as EventRow[];
+}
+
+/**
+ * Household view: returns every allowlisted user's events in the window,
+ * decorated with owner identity so the UI can color-code them. Used by the
+ * "Everyone" toggle on the Calendar tab.
+ */
+export function listEventsForHouseholdBetween(
+  db: DB,
+  from: string,
+  to: string
+): EventRowWithOwner[] {
+  return db
+    .select({
+      id: schema.calendarEvents.id,
+      calendarListId: schema.calendarEvents.calendarListId,
+      googleEventId: schema.calendarEvents.googleEventId,
+      status: schema.calendarEvents.status,
+      allDay: schema.calendarEvents.allDay,
+      startAt: schema.calendarEvents.startAt,
+      endAt: schema.calendarEvents.endAt,
+      startDate: schema.calendarEvents.startDate,
+      endDateExclusive: schema.calendarEvents.endDateExclusive,
+      startTz: schema.calendarEvents.startTz,
+      endTz: schema.calendarEvents.endTz,
+      title: schema.calendarEvents.title,
+      description: schema.calendarEvents.description,
+      location: schema.calendarEvents.location,
+      htmlLink: schema.calendarEvents.htmlLink,
+      recurringEventId: schema.calendarEvents.recurringEventId,
+      originalStartTime: schema.calendarEvents.originalStartTime,
+      ownerUserId: schema.users.id,
+      ownerDisplayName: schema.users.displayName,
+      ownerColor: schema.users.color,
+    })
+    .from(schema.calendarEvents)
+    .innerJoin(
+      schema.calendarLists,
+      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+    )
+    .innerJoin(
+      schema.calendarAccounts,
+      eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+    )
+    .innerJoin(
+      schema.users,
+      eq(schema.calendarAccounts.userId, schema.users.id)
+    )
+    .where(
+      and(
+        eq(schema.calendarLists.selected, true),
+        eventWindowOverlap(from, to)
+      )
+    )
+    .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
+    .all() as EventRowWithOwner[];
 }
 
 export function listAccountsForUser(

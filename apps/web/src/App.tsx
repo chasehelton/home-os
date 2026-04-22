@@ -3,6 +3,7 @@ import { TodoList } from './components/TodoList';
 import { Recipes } from './components/Recipes';
 import { MealPlan } from './components/MealPlan';
 import { Settings } from './components/Settings';
+import { Calendar } from './components/Calendar';
 
 interface Me {
   id: string;
@@ -11,7 +12,7 @@ interface Me {
   pictureUrl: string | null;
 }
 
-type Tab = 'todos' | 'recipes' | 'meals' | 'settings';
+type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'settings';
 
 export function App() {
   const [me, setMe] = useState<Me | null>(null);
@@ -19,8 +20,14 @@ export function App() {
   const [tab, setTab] = useState<Tab>(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get('tab');
-    return t === 'recipes' || t === 'meals' || t === 'settings' ? t : 'todos';
+    return t === 'recipes' || t === 'meals' || t === 'calendar' || t === 'settings' ? t : 'todos';
   });
+
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    p.set('tab', tab);
+    window.history.replaceState(null, '', `${window.location.pathname}?${p.toString()}`);
+  }, [tab]);
 
   async function refresh() {
     setLoading(true);
@@ -65,7 +72,7 @@ export function App() {
         <div className="flex items-center gap-4">
           <h1 className="text-xl font-semibold">home-os</h1>
           <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(['todos', 'recipes', 'meals', 'settings'] as Tab[]).map((t) => (
+            {(['todos', 'recipes', 'meals', 'calendar', 'settings'] as Tab[]).map((t) => (
               <button
                 key={t}
                 onClick={() => setTab(t)}
@@ -102,6 +109,8 @@ export function App() {
         <Recipes />
       ) : tab === 'meals' ? (
         <MealPlan />
+      ) : tab === 'calendar' ? (
+        <Calendar currentUserId={me.id} />
       ) : (
         <Settings />
       )}

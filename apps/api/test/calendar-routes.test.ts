@@ -167,4 +167,124 @@ describe('calendar routes', () => {
     expect(res.statusCode).toBe(200);
     expect(res.json().results).toEqual([]);
   });
+
+  it('window overlap: picks up events that started before "from" but end inside', async () => {
+    // Event that starts at 23:00 UTC on 2025-03-09 and ends at 01:00 UTC on 2025-03-10
+    ctx.deps.db.insert(schema.calendarEvents).values({
+      id: 'ev-overnight',
+      calendarListId: 'list-a',
+      googleEventId: 'g-over',
+      title: 'Overnight',
+      allDay: false,
+      startAt: '2025-03-09T23:00:00.000Z',
+      endAt: '2025-03-10T01:00:00.000Z',
+      status: 'confirmed',
+    }).run();
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/calendar/events?from=2025-03-10&to=2025-03-10',
+      headers: { cookie: cookieFor('u-a') },
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = res.json().events.map((e: { id: string }) => e.id);
+    expect(ids).toContain('ev-overnight');
+  });
+
+  it('window overlap: picks up multi-day all-day events that span the window', async () => {
+    ctx.deps.db.insert(schema.calendarEvents).values({
+      id: 'ev-trip',
+      calendarListId: 'list-a',
+      googleEventId: 'g-trip',
+      title: 'Trip',
+      allDay: true,
+      startDate: '2025-05-01',
+      endDateExclusive: '2025-05-10',
+      status: 'confirmed',
+    }).run();
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/calendar/events?from=2025-05-05&to=2025-05-05',
+      headers: { cookie: cookieFor('u-a') },
+    });
+    expect(res.statusCode).toBe(200);
+    const ids = res.json().events.map((e: { id: string }) => e.id);
+    expect(ids).toContain('ev-trip');
+  });
+
+  it('scope=household returns events from all users with owner fields', async () => {
+    // Give u-b their own account + event
+    const crypto = makeTokenCrypto(deriveTokenKey(ctx.deps.env));
+    ctx.deps.db.insert(schema.calendarAccounts).values({
+      id: 'acc-b',
+      userId: 'u-b',
+      googleSub: 'sub-b',
+      email: 'b@example.com',
+      refreshTokenEnc: crypto.seal('rt-b'),
+      scopes: 'x',
+      status: 'active',
+    }).run();
+    ctx.deps.db.insert(schema.calendarLists).values({
+      id: 'list-b',
+      accountId: 'acc-b',
+      googleCalendarId: 'primary',
+      summary: 'B',
+      primary: true,
+      selected: true,
+    }).run();
+    ctx.deps.db.insert(schema.calendarEvents).values({
+      id: 'ev-b',
+      calendarListId: 'list-b',
+      googleEventId: 'gb',
+      title: 'B event',
+      allDay: false,
+      startAt: '2025-03-10T14:00:00.000Z',
+      endAt: '2025-03-10T15:00:00.000Z',
+      status: 'confirmed',
+    }).run();
+
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/calendar/events?from=2025-03-10&to=2025-03-10&scope=household',
+      headers: { cookie: cookieFor('u-a') },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.scope).toBe('household');
+    const byId = Object.fromEntries(
+      (body.events as Array<{ id: string; ownerUserId: string; ownerDisplayName: string }>)
+        .map((e) => [e.id, e])
+    );
+    expect(byId['ev-in']?.ownerUserId).toBe('u-a');
+    expect(byId['ev-b']?.ownerUserId).toBe('u-b');
+    expect(byId['ev-b']?.ownerDisplayName).toBe('B');
+  });
+
+  it('scope=invalid returns 400', async () => {
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/calendar/events?from=2025-03-01&to=2025-03-31&scope=bogus',
+      headers: { cookie: cookieFor('u-a') },
+    });
+    expect(res.statusCode).toBe(400);
+  });
+});
+
+describe('household roster', () => {
+  it('requires auth', async () => {
+    const res = await ctx.app.inject({ method: 'GET', url: '/api/household/members' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  it('returns all members with non-sensitive fields', async () => {
+    const res = await ctx.app.inject({
+      method: 'GET',
+      url: '/api/household/members',
+      headers: { cookie: cookieFor('u-a') },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.members).toHaveLength(2);
+    const first = body.members[0];
+    expect(Object.keys(first).sort()).toEqual(['color', 'displayName', 'id', 'pictureUrl']);
+  });
 });

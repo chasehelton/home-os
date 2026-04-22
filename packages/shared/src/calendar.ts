@@ -60,5 +60,14 @@ export type CalendarEvent = z.infer<typeof CalendarEvent>;
 export const ListCalendarEventsQuery = z.object({
   from: IsoDate,
   to: IsoDate,
+  scope: z.enum(['self', 'household']).default('self'),
 });
 export type ListCalendarEventsQuery = z.infer<typeof ListCalendarEventsQuery>;
+
+export const HouseholdMember = z.object({
+  id: z.string(),
+  displayName: z.string(),
+  color: z.string().nullable(),
+  pictureUrl: z.string().nullable(),
+});
+export type HouseholdMember = z.infer<typeof HouseholdMember>;
