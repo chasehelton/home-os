@@ -1,10 +1,6 @@
 import { describe, it, expect, afterEach, beforeEach } from 'vitest';
 import { makeTestApp } from './_helpers.js';
-import {
-  upsertUserFromClaims,
-  findUserBySub,
-  findUserByEmail,
-} from '../src/auth/users.js';
+import { upsertUserFromClaims, findUserBySub, findUserByEmail } from '../src/auth/users.js';
 
 let ctx: Awaited<ReturnType<typeof makeTestApp>>;
 

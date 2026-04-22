@@ -2,12 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { GoogleOidc, OidcDisabledError } from '../auth/oidc.js';
 import { allowedEmails } from '../env.js';
-import {
-  createSession,
-  deleteSession,
-  SESSION_COOKIE,
-  SESSION_TTL_MS,
-} from '../auth/sessions.js';
+import { createSession, deleteSession, SESSION_COOKIE, SESSION_TTL_MS } from '../auth/sessions.js';
 import { upsertUserFromClaims } from '../auth/users.js';
 import { logAudit } from '../auth/audit.js';
 import { requireUser } from '../auth/middleware.js';
@@ -144,18 +139,14 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     return { ok: true };
   });
 
-  app.get(
-    '/api/me',
-    { preHandler: requireUser(app) },
-    async (req) => {
-      const u = req.user!;
-      return {
-        id: u.id,
-        email: u.email,
-        displayName: u.displayName,
-        pictureUrl: u.pictureUrl,
-        color: u.color,
-      };
-    },
-  );
+  app.get('/api/me', { preHandler: requireUser(app) }, async (req) => {
+    const u = req.user!;
+    return {
+      id: u.id,
+      email: u.email,
+      displayName: u.displayName,
+      pictureUrl: u.pictureUrl,
+      color: u.color,
+    };
+  });
 }

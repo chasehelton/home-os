@@ -48,10 +48,7 @@ interface HouseholdMember {
 type ViewMode = 'agenda' | 'week' | 'day';
 type Scope = 'self' | 'household';
 
-type EditorState =
-  | null
-  | { mode: 'create'; anchorDate: Date }
-  | { mode: 'edit'; event: EventRow };
+type EditorState = null | { mode: 'create'; anchorDate: Date } | { mode: 'edit'; event: EventRow };
 
 interface CalendarProps {
   currentUserId: string;
@@ -199,25 +196,27 @@ export function Calendar({ currentUserId }: CalendarProps) {
   useEffect(() => {
     void fetch('/api/calendar/accounts', { credentials: 'include' })
       .then((r) => (r.ok ? r.json() : { accounts: [] }))
-      .then((b: {
-        accounts: Array<{
-          id: string;
-          email: string;
-          canWrite: boolean;
-          calendars: Array<{ id: string; primary: boolean }>;
-        }>;
-      }) => {
-        const mine = b.accounts[0];
-        if (!mine) return setPrimary(null);
-        const p = mine.calendars.find((c) => c.primary);
-        if (!p) return setPrimary(null);
-        setPrimary({
-          accountId: mine.id,
-          calendarListId: p.id,
-          canWrite: mine.canWrite,
-          email: mine.email,
-        });
-      });
+      .then(
+        (b: {
+          accounts: Array<{
+            id: string;
+            email: string;
+            canWrite: boolean;
+            calendars: Array<{ id: string; primary: boolean }>;
+          }>;
+        }) => {
+          const mine = b.accounts[0];
+          if (!mine) return setPrimary(null);
+          const p = mine.calendars.find((c) => c.primary);
+          if (!p) return setPrimary(null);
+          setPrimary({
+            accountId: mine.id,
+            calendarListId: p.id,
+            canWrite: mine.canWrite,
+            email: mine.email,
+          });
+        },
+      );
   }, []);
 
   useEffect(() => {
@@ -255,7 +254,7 @@ export function Calendar({ currentUserId }: CalendarProps) {
         const owner = e.ownerUserId ?? currentUserId;
         return !hidden.has(owner);
       }),
-    [events, hidden, currentUserId]
+    [events, hidden, currentUserId],
   );
 
   function toggleHidden(userId: string) {
@@ -357,10 +356,7 @@ export function Calendar({ currentUserId }: CalendarProps) {
                 } bg-slate-800 hover:bg-slate-700`}
                 title={off ? `Show ${m.displayName}` : `Hide ${m.displayName}`}
               >
-                <span
-                  className="h-2.5 w-2.5 rounded-full"
-                  style={{ backgroundColor: color }}
-                />
+                <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
                 <span>{m.displayName}</span>
               </button>
             );
@@ -687,9 +683,11 @@ function WeekView({
                 const dayStart = new Date(d);
                 dayStart.setHours(0, 0, 0, 0);
                 const dayEnd = addDays(dayStart, 1);
-                const top = Math.max(0, (s.getTime() - dayStart.getTime()) / 3_600_000) * PX_PER_HOUR;
+                const top =
+                  Math.max(0, (s.getTime() - dayStart.getTime()) / 3_600_000) * PX_PER_HOUR;
                 const bottom =
-                  Math.min(HOURS_TOTAL, (en.getTime() - dayStart.getTime()) / 3_600_000) * PX_PER_HOUR;
+                  Math.min(HOURS_TOTAL, (en.getTime() - dayStart.getTime()) / 3_600_000) *
+                  PX_PER_HOUR;
                 const height = Math.max(18, bottom - top);
                 const clippedLeft = s < dayStart;
                 const clippedRight = en > dayEnd;
@@ -777,7 +775,9 @@ function EventChip({
         </div>
         <EventBadges event={event} />
       </div>
-      {!compact && timeLabel && <div className="truncate text-[10px] text-slate-400">{timeLabel}</div>}
+      {!compact && timeLabel && (
+        <div className="truncate text-[10px] text-slate-400">{timeLabel}</div>
+      )}
       {scope === 'household' && event.ownerDisplayName && (
         <div className="truncate text-[10px] text-slate-400">· {event.ownerDisplayName}</div>
       )}
@@ -825,7 +825,7 @@ function EventBadges({ event }: { event: EventRow }) {
 function toLocalInput(d: Date): string {
   const pad = (n: number) => n.toString().padStart(2, '0');
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
-    d.getHours()
+    d.getHours(),
   )}:${pad(d.getMinutes())}`;
 }
 
@@ -982,8 +982,8 @@ function EventEditor({
 
         {existing?.hasConflict && (
           <div className="mb-3 rounded border border-red-700 bg-red-950/60 p-2 text-xs text-red-200">
-            This event has a sync conflict with Google. Keep the server version and drop your
-            local changes?{' '}
+            This event has a sync conflict with Google. Keep the server version and drop your local
+            changes?{' '}
             <button
               onClick={discard}
               disabled={submitting}
@@ -1005,11 +1005,7 @@ function EventEditor({
             />
           </label>
           <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
-            />
+            <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
             <span className="text-slate-300">All day</span>
           </label>
           {allDay ? (

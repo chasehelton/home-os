@@ -62,7 +62,11 @@ async function seedAccount(ctx: Awaited<ReturnType<typeof makeTestApp>>) {
       status: 'active',
     })
     .run();
-  return db.select().from(schema.calendarAccounts).where(eq(schema.calendarAccounts.id, 'acc1')).get() as AccountRow;
+  return db
+    .select()
+    .from(schema.calendarAccounts)
+    .where(eq(schema.calendarAccounts.id, 'acc1'))
+    .get() as AccountRow;
 }
 
 function cfgFor(env: Env, fetchImpl: typeof fetch): SyncConfig {
@@ -245,7 +249,7 @@ describe('calendar sync', () => {
     const r = await syncAccount(
       ctx.deps.db,
       { ...account, status: 'disabled' },
-      cfgFor(ctx.deps.env, makeFetch({}))
+      cfgFor(ctx.deps.env, makeFetch({})),
     );
     expect(r.error).toBe('account_inactive');
   });

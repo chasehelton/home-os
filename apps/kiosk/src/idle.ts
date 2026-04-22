@@ -14,11 +14,7 @@ export function onActivity(state: IdleState, now: number): IdleState {
   return { lastActivityAt: now, dimmed: false };
 }
 
-export function tickIdle(
-  state: IdleState,
-  now: number,
-  thresholdMs: number
-): IdleState {
+export function tickIdle(state: IdleState, now: number, thresholdMs: number): IdleState {
   const idleFor = now - state.lastActivityAt;
   const shouldDim = idleFor >= thresholdMs;
   if (shouldDim === state.dimmed) return state;

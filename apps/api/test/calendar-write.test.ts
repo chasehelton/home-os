@@ -49,7 +49,7 @@ function makeFetch(responder: Responder, calls: Call[] = []): typeof fetch {
     const nullBody = r.status === 204 || r.status === 205 || r.status === 304;
     return new Response(
       nullBody ? null : typeof r.body === 'string' ? r.body : JSON.stringify(r.body),
-      { status: r.status }
+      { status: r.status },
     );
   }) as unknown as typeof fetch;
 }
@@ -212,7 +212,7 @@ describe('calendar write — local mutations', () => {
         allDay: false,
         startAt: '2025-03-10T12:00:00.000Z',
         endAt: '2025-03-10T13:00:00.000Z',
-      })
+      }),
     ).toThrow(WriteError);
   });
 });

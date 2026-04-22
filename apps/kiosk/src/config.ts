@@ -19,8 +19,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): KioskConfig {
   const url = env.HOME_OS_KIOSK_URL ?? 'http://localhost:5173';
   // By default probe api on same host, different port. In real deploy this
   // will be same-origin behind Caddy; both get overridden via env.
-  const healthUrl =
-    env.HOME_OS_KIOSK_HEALTH_URL ?? inferHealthUrl(url);
+  const healthUrl = env.HOME_OS_KIOSK_HEALTH_URL ?? inferHealthUrl(url);
   // URL rendered in the QR code on the crash screen. Defaults to the
   // kiosk URL but on a Pi this should be the tailnet hostname so a phone
   // on the same tailnet can actually reach it.

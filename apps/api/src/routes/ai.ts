@@ -68,8 +68,7 @@ export async function registerAiRoutes(app: FastifyInstance) {
   app.get('/api/ai/status', { preHandler: auth }, async (req, reply) => {
     // For Copilot, report whether *this user* has a GitHub connection so the
     // UI can show "Connect GitHub" instead of a generic disabled state.
-    const needsGithub =
-      provider.name === 'copilot' && !getGithubAccountPublic(db, req.user!.id);
+    const needsGithub = provider.name === 'copilot' && !getGithubAccountPublic(db, req.user!.id);
     return reply.send({
       provider: provider.name,
       enabled: provider.enabled,
@@ -121,7 +120,7 @@ export async function registerAiRoutes(app: FastifyInstance) {
           userId: req.user!.id,
           syncCfg: app.calendarSyncCfg,
         },
-        call
+        call,
       );
       outcomes.push(outcome);
     }
@@ -131,7 +130,7 @@ export async function registerAiRoutes(app: FastifyInstance) {
       provider.name,
       parsed.data.prompt,
       parsed.data.toolCalls,
-      outcomes
+      outcomes,
     );
     return reply.send({ outcomes });
   });
@@ -163,7 +162,7 @@ function recordTranscript(
   provider: string,
   prompt: string,
   toolCalls: ToolCall[],
-  outcomes: ToolOutcome[] | null
+  outcomes: ToolOutcome[] | null,
 ) {
   db.insert(schema.aiTranscripts)
     .values({

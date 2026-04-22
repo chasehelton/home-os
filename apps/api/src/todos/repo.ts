@@ -28,14 +28,10 @@ export function findTodoById(db: DB, id: string): TodoRow | null {
  * - household-scoped todos are visible to every authenticated user.
  * - user-scoped todos are visible only to their owner.
  */
-export function listTodosForUser(
-  db: DB,
-  userId: string,
-  query: ListTodosQuery
-): TodoRow[] {
+export function listTodosForUser(db: DB, userId: string, query: ListTodosQuery): TodoRow[] {
   const visible = or(
     eq(schema.todos.scope, 'household'),
-    and(eq(schema.todos.scope, 'user'), eq(schema.todos.ownerUserId, userId))
+    and(eq(schema.todos.scope, 'user'), eq(schema.todos.ownerUserId, userId)),
   );
 
   let scopeFilter;
@@ -61,16 +57,12 @@ export function listTodosForUser(
       dsql`CASE WHEN ${schema.todos.completedAt} IS NULL THEN 0 ELSE 1 END`,
       dsql`CASE WHEN ${schema.todos.dueAt} IS NULL THEN 1 ELSE 0 END`,
       schema.todos.dueAt,
-      desc(schema.todos.createdAt)
+      desc(schema.todos.createdAt),
     )
     .all();
 }
 
-export function createTodo(
-  db: DB,
-  actorId: string,
-  input: CreateTodoInput
-): TodoRow {
+export function createTodo(db: DB, actorId: string, input: CreateTodoInput): TodoRow {
   let ownerUserId: string | null;
   if (input.scope === 'household') {
     ownerUserId = null;
@@ -101,7 +93,7 @@ export function updateTodo(
   db: DB,
   actorId: string,
   id: string,
-  patch: UpdateTodoInput
+  patch: UpdateTodoInput,
 ): TodoRow | null {
   const existing = findTodoById(db, id);
   if (!existing) return null;

@@ -4,12 +4,7 @@
 // idle dim so those concerns never leak into the web app itself.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import {
-  initialIdleState,
-  onActivity,
-  tickIdle,
-  type IdleState,
-} from './idle.js';
+import { initialIdleState, onActivity, tickIdle, type IdleState } from './idle.js';
 
 interface KioskConfigBridge {
   idleMs: number;
@@ -159,7 +154,7 @@ function install(): void {
 async function boot(): Promise<void> {
   if (document.readyState === 'loading') {
     await new Promise<void>((resolve) =>
-      document.addEventListener('DOMContentLoaded', () => resolve(), { once: true })
+      document.addEventListener('DOMContentLoaded', () => resolve(), { once: true }),
     );
   }
   const cfg = (await ipcRenderer.invoke('kiosk:config')) as KioskConfigBridge;
@@ -168,12 +163,9 @@ async function boot(): Promise<void> {
   ipcRenderer.on('kiosk:health', (_e, payload: { offline: boolean }) => {
     setOffline(payload.offline);
   });
-  ipcRenderer.on(
-    'kiosk:cleaning',
-    (_e, payload: { active: boolean; endsAt: number }) => {
-      setCleaning(payload.active, payload.endsAt);
-    }
-  );
+  ipcRenderer.on('kiosk:cleaning', (_e, payload: { active: boolean; endsAt: number }) => {
+    setCleaning(payload.active, payload.endsAt);
+  });
 }
 
 void boot();

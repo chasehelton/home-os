@@ -17,18 +17,12 @@ export interface UserRow {
 }
 
 export function findUserBySub(db: DB, sub: string): UserRow | null {
-  return (
-    db.select().from(schema.users).where(eq(schema.users.googleSub, sub)).get() ?? null
-  );
+  return db.select().from(schema.users).where(eq(schema.users.googleSub, sub)).get() ?? null;
 }
 
 export function findUserByEmail(db: DB, email: string): UserRow | null {
   return (
-    db
-      .select()
-      .from(schema.users)
-      .where(eq(schema.users.email, email.toLowerCase()))
-      .get() ?? null
+    db.select().from(schema.users).where(eq(schema.users.email, email.toLowerCase())).get() ?? null
   );
 }
 
@@ -42,8 +36,7 @@ export function findUserById(db: DB, id: string): UserRow | null {
  * keeps email/displayName/picture in sync with the latest claims.
  */
 export function upsertUserFromClaims(db: DB, claims: OidcVerifiedClaims): UserRow {
-  const existing =
-    findUserBySub(db, claims.sub) ?? findUserByEmail(db, claims.email);
+  const existing = findUserBySub(db, claims.sub) ?? findUserByEmail(db, claims.email);
 
   if (existing) {
     db.update(schema.users)

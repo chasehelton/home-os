@@ -14,7 +14,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "generate": "drizzle-kit generate",
-    "migrate": "tsx src/migrate.ts"
+    "migrate": "tsx src/migrate.ts",
+    "migrate:safe": "tsx src/migrate-safe.ts"
   },
   "dependencies": {
     "better-sqlite3": "^11.7.0",

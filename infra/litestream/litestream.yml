@@ -1,0 +1,25 @@
+# Continuous replication of the home-os SQLite DB to S3-compatible storage.
+# See https://litestream.io/reference/config/.
+#
+# Env vars (passed through docker-compose):
+#   LITESTREAM_REPLICA_URL        e.g. s3://my-bucket/home-os (or b2://...)
+#   LITESTREAM_ACCESS_KEY_ID      S3/B2 access key
+#   LITESTREAM_SECRET_ACCESS_KEY  S3/B2 secret
+#   LITESTREAM_REGION             e.g. us-east-1 (optional for B2)
+#   HOME_OS_DB_PATH               /data/db/home-os.sqlite (set by compose)
+#
+# To restore on a fresh machine:
+#   litestream restore -if-replica-exists -o $HOME_OS_DB_PATH "$LITESTREAM_REPLICA_URL"
+
+access-key-id: ${LITESTREAM_ACCESS_KEY_ID}
+secret-access-key: ${LITESTREAM_SECRET_ACCESS_KEY}
+
+dbs:
+  - path: ${HOME_OS_DB_PATH}
+    replicas:
+      - url: ${LITESTREAM_REPLICA_URL}
+        region: ${LITESTREAM_REGION}
+        retention: 168h # 7 days of WAL retained in the replica
+        retention-check-interval: 1h
+        snapshot-interval: 24h
+        sync-interval: 10s

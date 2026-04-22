@@ -36,9 +36,7 @@ describe('OpenAIProvider', () => {
     });
     const p = new OpenAIProvider({ apiKey: 'sk-test', fetchImpl });
     const out = await p.parseIntent('add milk', ctx);
-    expect(out).toEqual([
-      { tool: 'create_todo', args: { title: 'milk', scope: 'household' } },
-    ]);
+    expect(out).toEqual([{ tool: 'create_todo', args: { title: 'milk', scope: 'household' } }]);
     expect(fetchImpl).toHaveBeenCalledOnce();
     const call = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;
     expect(String(call[0])).toContain('/v1/chat/completions');

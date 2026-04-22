@@ -76,7 +76,7 @@ export function upsertGithubAccount(
     githubLogin: string;
     accessToken: string;
     scopes: string;
-  }
+  },
 ): void {
   const crypto = makeTokenCrypto(deriveTokenKey(env));
   const enc = crypto.seal(params.accessToken);

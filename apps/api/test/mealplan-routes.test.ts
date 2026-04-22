@@ -10,8 +10,20 @@ beforeEach(async () => {
   ctx.deps.db
     .insert(schema.users)
     .values([
-      { id: 'u-jane', email: 'jane@example.com', emailVerified: true, displayName: 'Jane', googleSub: 'g1' },
-      { id: 'u-john', email: 'john@example.com', emailVerified: true, displayName: 'John', googleSub: 'g2' },
+      {
+        id: 'u-jane',
+        email: 'jane@example.com',
+        emailVerified: true,
+        displayName: 'Jane',
+        googleSub: 'g1',
+      },
+      {
+        id: 'u-john',
+        email: 'john@example.com',
+        emailVerified: true,
+        displayName: 'John',
+        googleSub: 'g2',
+      },
     ])
     .run();
   ctx.deps.db

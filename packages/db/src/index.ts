@@ -46,3 +46,9 @@ export function runMigrations(options: OpenDbOptions = {}): void {
 export { schema };
 export * from './paths.js';
 export { dbFilePath };
+export { scanMigrationSql } from './destructive.js';
+export type { DestructiveFinding, ScanResult } from './destructive.js';
+export { listPendingMigrations } from './pending.js';
+export type { PendingMigration } from './pending.js';
+export { createSnapshot, defaultSnapshotPath } from './snapshot.js';
+export type { SnapshotResult } from './snapshot.js';

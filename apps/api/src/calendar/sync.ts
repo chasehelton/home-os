@@ -65,7 +65,10 @@ export async function withAccountLock<T>(accountId: string, fn: () => Promise<T>
   const next = new Promise<void>((r) => {
     resolve = r;
   });
-  accountLocks.set(accountId, prev.then(() => next));
+  accountLocks.set(
+    accountId,
+    prev.then(() => next),
+  );
   try {
     await prev;
     return await fn();
@@ -94,7 +97,7 @@ export interface SyncAccountResult {
 export async function syncAccount(
   db: DB,
   account: AccountRow,
-  cfg: SyncConfig
+  cfg: SyncConfig,
 ): Promise<SyncAccountResult> {
   const result: SyncAccountResult = {
     accountId: account.id,
@@ -185,7 +188,7 @@ async function syncEventsForCalendar(
   db: DB,
   list: CalendarListRow,
   accessToken: string,
-  cfg: SyncConfig
+  cfg: SyncConfig,
 ): Promise<EventSyncResult> {
   const full = !list.syncToken;
   let pageToken: string | undefined;
@@ -249,7 +252,7 @@ function applyEventRow(
   db: DB,
   calendarListId: string,
   ev: GoogleEvent,
-  isFullSync: boolean
+  isFullSync: boolean,
 ): ApplyResult {
   const out: ApplyResult = { upserted: 0, deleted: 0, cancelledKept: 0 };
   if (!ev.id) return out;
@@ -267,8 +270,8 @@ function applyEventRow(
       .where(
         and(
           eq(schema.calendarEvents.calendarListId, calendarListId),
-          eq(schema.calendarEvents.mutationId, mutationId)
-        )
+          eq(schema.calendarEvents.mutationId, mutationId),
+        ),
       )
       .get();
     if (matchedLocal && matchedLocal.googleEventId !== ev.id) {
@@ -293,8 +296,8 @@ function applyEventRow(
     .where(
       and(
         eq(schema.calendarEvents.calendarListId, calendarListId),
-        eq(schema.calendarEvents.googleEventId, ev.id)
-      )
+        eq(schema.calendarEvents.googleEventId, ev.id),
+      ),
     )
     .get();
 
@@ -310,16 +313,12 @@ function applyEventRow(
   if (ev.status === 'cancelled') {
     if (existing) {
       if (isFullSync) {
-        db.delete(schema.calendarEvents)
-          .where(eq(schema.calendarEvents.id, existing.id))
-          .run();
+        db.delete(schema.calendarEvents).where(eq(schema.calendarEvents.id, existing.id)).run();
         out.deleted += 1;
       } else {
         // Incremental cancellation: remove the row — it no longer exists on
         // the remote side (read-only mirror).
-        db.delete(schema.calendarEvents)
-          .where(eq(schema.calendarEvents.id, existing.id))
-          .run();
+        db.delete(schema.calendarEvents).where(eq(schema.calendarEvents.id, existing.id)).run();
         out.deleted += 1;
       }
     } else {
@@ -349,8 +348,7 @@ function applyEventRow(
     location: ev.location ?? null,
     htmlLink: ev.htmlLink ?? null,
     recurringEventId: ev.recurringEventId ?? null,
-    originalStartTime:
-      ev.originalStartTime?.dateTime ?? ev.originalStartTime?.date ?? null,
+    originalStartTime: ev.originalStartTime?.dateTime ?? ev.originalStartTime?.date ?? null,
     googleUpdatedAt: ev.updated ?? null,
     updatedAt: NOW_SQL as unknown as string,
   };
@@ -387,11 +385,7 @@ function normalizeEventTime(t: GoogleEvent['start']): {
   return {};
 }
 
-function upsertCalendarLists(
-  db: DB,
-  accountId: string,
-  remote: GoogleCalendarListEntry[]
-): void {
+function upsertCalendarLists(db: DB, accountId: string, remote: GoogleCalendarListEntry[]): void {
   const existing = db
     .select()
     .from(schema.calendarLists)
@@ -403,9 +397,7 @@ function upsertCalendarLists(
     if (r.deleted) {
       const e = byId.get(r.id);
       if (e) {
-        db.delete(schema.calendarLists)
-          .where(eq(schema.calendarLists.id, e.id))
-          .run();
+        db.delete(schema.calendarLists).where(eq(schema.calendarLists.id, e.id)).run();
       }
       continue;
     }
@@ -538,13 +530,13 @@ function eventWindowOverlap(from: string, to: string) {
       eq(schema.calendarEvents.allDay, true),
       // all-day overlap: start_date < (to + 1 day) AND end_date_exclusive > from
       lt(schema.calendarEvents.startDate, dayPlus),
-      gt(schema.calendarEvents.endDateExclusive, from)
+      gt(schema.calendarEvents.endDateExclusive, from),
     ),
     and(
       eq(schema.calendarEvents.allDay, false),
       lt(schema.calendarEvents.startAt, windowEndIso),
-      gt(schema.calendarEvents.endAt, windowStartIso)
-    )
+      gt(schema.calendarEvents.endAt, windowStartIso),
+    ),
   );
 }
 
@@ -563,7 +555,7 @@ function notPendingDelete() {
     // SQL NULL-safe check: pending_op IS NULL or pending_op != 'delete'
     eq(schema.calendarEvents.pendingOp, 'create'),
     eq(schema.calendarEvents.pendingOp, 'update'),
-    dsql`${schema.calendarEvents.pendingOp} IS NULL`
+    dsql`${schema.calendarEvents.pendingOp} IS NULL`,
   );
 }
 
@@ -571,7 +563,7 @@ export function listEventsForUserBetween(
   db: DB,
   userId: string,
   from: string,
-  to: string
+  to: string,
 ): EventRow[] {
   const rows = db
     .select({
@@ -600,29 +592,31 @@ export function listEventsForUserBetween(
     .from(schema.calendarEvents)
     .innerJoin(
       schema.calendarLists,
-      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
     )
     .innerJoin(
       schema.calendarAccounts,
-      eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+      eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
     )
     .where(
       and(
         eq(schema.calendarAccounts.userId, userId),
         eq(schema.calendarLists.selected, true),
         notPendingDelete(),
-        eventWindowOverlap(from, to)
-      )
+        eventWindowOverlap(from, to),
+      ),
     )
     .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
     .all();
   return rows.map(decorateEventRow);
 }
 
-function decorateEventRow<T extends {
-  conflictPayload: string | null;
-  localDirty: boolean;
-}>(r: T): Omit<T, 'conflictPayload'> & { hasConflict: boolean } {
+function decorateEventRow<
+  T extends {
+    conflictPayload: string | null;
+    localDirty: boolean;
+  },
+>(r: T): Omit<T, 'conflictPayload'> & { hasConflict: boolean } {
   const { conflictPayload, ...rest } = r;
   return { ...rest, hasConflict: conflictPayload != null };
 }
@@ -635,7 +629,7 @@ function decorateEventRow<T extends {
 export function listEventsForHouseholdBetween(
   db: DB,
   from: string,
-  to: string
+  to: string,
 ): EventRowWithOwner[] {
   const rows = db
     .select({
@@ -667,22 +661,19 @@ export function listEventsForHouseholdBetween(
     .from(schema.calendarEvents)
     .innerJoin(
       schema.calendarLists,
-      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id)
+      eq(schema.calendarEvents.calendarListId, schema.calendarLists.id),
     )
     .innerJoin(
       schema.calendarAccounts,
-      eq(schema.calendarLists.accountId, schema.calendarAccounts.id)
+      eq(schema.calendarLists.accountId, schema.calendarAccounts.id),
     )
-    .innerJoin(
-      schema.users,
-      eq(schema.calendarAccounts.userId, schema.users.id)
-    )
+    .innerJoin(schema.users, eq(schema.calendarAccounts.userId, schema.users.id))
     .where(
       and(
         eq(schema.calendarLists.selected, true),
         notPendingDelete(),
-        eventWindowOverlap(from, to)
-      )
+        eventWindowOverlap(from, to),
+      ),
     )
     .orderBy(schema.calendarEvents.startDate, schema.calendarEvents.startAt)
     .all();
@@ -691,7 +682,7 @@ export function listEventsForHouseholdBetween(
 
 export function listAccountsForUser(
   db: DB,
-  userId: string
+  userId: string,
 ): Array<AccountRow & { calendars: CalendarListRow[] }> {
   const accounts = db
     .select()

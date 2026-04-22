@@ -69,7 +69,7 @@ export async function registerTodoRoutes(app: FastifyInstance) {
       } catch (err) {
         return handleScopeError(err, reply);
       }
-    }
+    },
   );
 
   app.delete<{ Params: { id: string } }>(
@@ -93,7 +93,7 @@ export async function registerTodoRoutes(app: FastifyInstance) {
       } catch (err) {
         return handleScopeError(err, reply);
       }
-    }
+    },
   );
 }
 

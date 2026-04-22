@@ -58,7 +58,7 @@ export async function createRecipeApi(body: {
 
 export async function updateRecipeApi(
   id: string,
-  body: Partial<{ title: string; markdown: string; description: string | null }>
+  body: Partial<{ title: string; markdown: string; description: string | null }>,
 ): Promise<Recipe> {
   return jsonFetch<Recipe>(`/api/recipes/${id}`, {
     method: 'PATCH',

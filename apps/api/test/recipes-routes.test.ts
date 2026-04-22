@@ -84,22 +84,29 @@ describe('recipe routes', () => {
       </article></body></html>`;
 
     const realFetch = globalThis.fetch;
-    const mock = vi.spyOn(globalThis, 'fetch').mockImplementation(async (input: Parameters<typeof fetch>[0]) => {
-      const url = typeof input === 'string' ? input : input instanceof URL ? input.toString() : (input as Request).url;
-      if (url.startsWith('https://example.org/recipe')) {
-        return new Response(html, {
-          status: 200,
-          headers: { 'content-type': 'text/html' },
-        });
-      }
-      if (url.startsWith('https://example.com/soup.jpg')) {
-        return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), {
-          status: 200,
-          headers: { 'content-type': 'image/jpeg' },
-        });
-      }
-      return realFetch(input);
-    });
+    const mock = vi
+      .spyOn(globalThis, 'fetch')
+      .mockImplementation(async (input: Parameters<typeof fetch>[0]) => {
+        const url =
+          typeof input === 'string'
+            ? input
+            : input instanceof URL
+              ? input.toString()
+              : (input as Request).url;
+        if (url.startsWith('https://example.org/recipe')) {
+          return new Response(html, {
+            status: 200,
+            headers: { 'content-type': 'text/html' },
+          });
+        }
+        if (url.startsWith('https://example.com/soup.jpg')) {
+          return new Response(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]), {
+            status: 200,
+            headers: { 'content-type': 'image/jpeg' },
+          });
+        }
+        return realFetch(input);
+      });
 
     const res = await ctx.app.inject({
       method: 'POST',

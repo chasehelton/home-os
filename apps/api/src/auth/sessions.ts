@@ -12,7 +12,10 @@ export interface CreateSessionInput {
   ttlMs?: number;
 }
 
-export function createSession(db: DB, input: CreateSessionInput): {
+export function createSession(
+  db: DB,
+  input: CreateSessionInput,
+): {
   id: string;
   expiresAt: Date;
 } {
@@ -35,11 +38,7 @@ export function lookupSession(
   sessionId: string,
   now: Date = new Date(),
 ): { userId: string; expiresAt: Date } | null {
-  const row = db
-    .select()
-    .from(schema.sessions)
-    .where(eq(schema.sessions.id, sessionId))
-    .get();
+  const row = db.select().from(schema.sessions).where(eq(schema.sessions.id, sessionId)).get();
   if (!row) return null;
   const expiresAt = new Date(row.expiresAt);
   if (expiresAt.getTime() <= now.getTime()) {

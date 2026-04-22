@@ -5,11 +5,7 @@
 import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
 import * as path from 'node:path';
 import { loadConfig, type KioskConfig } from './config.js';
-import {
-  initialHealthState,
-  onHealthResult,
-  type HealthState,
-} from './health.js';
+import { initialHealthState, onHealthResult, type HealthState } from './health.js';
 
 const cfg: KioskConfig = loadConfig();
 
@@ -99,7 +95,7 @@ function createWindow(): void {
 async function loadDiagnostics(
   win: BrowserWindow,
   errorCode: number,
-  errorDescription: string
+  errorDescription: string,
 ): Promise<void> {
   const file = path.join(__dirname, 'crash.html');
   const params = new URLSearchParams({

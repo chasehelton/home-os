@@ -20,6 +20,7 @@ export function makeTestEnv(over: Partial<Env> = {}): Env {
     HOME_OS_GITHUB_CLIENT_ID: 'Iv1.test-client-id',
     HOME_OS_COPILOT_MODEL: 'gpt-5',
     HOME_OS_CALENDAR_SYNC_INTERVAL_MS: 5 * 60 * 1000,
+    HOME_OS_AUTO_MIGRATE: true,
     NODE_ENV: 'test' as const,
     ...over,
   };

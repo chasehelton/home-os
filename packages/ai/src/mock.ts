@@ -53,14 +53,17 @@ export class MockProvider implements AiProvider {
       // Drop trailing clause like "to the shared todo list", "as a task", etc.
       title = title.replace(
         /\s*(to|on|for|as)\s+(the\s+)?(shared|household|user|personal|my)?\s*(todo|task|reminder|to[-\s]?do)s?(\s+list)?\.?$/i,
-        ''
+        '',
       );
       // Drop leading "task/todo to" pattern: "task to call mom" -> "call mom".
       title = title.replace(/^(a\s+)?(todo|task|reminder|to[-\s]?do)\s*(to|for|:)\s+/i, '');
       // Drop leading "for me:" / "for me to" framing.
       title = title.replace(/^(a\s+)?(todo|task|reminder|to[-\s]?do)\s+(for\s+me)\s*:?\s*/i, '');
       title = title.replace(/^for\s+me\s*:\s*/i, '');
-      title = title.trim().replace(/^[:,-]\s*/, '').slice(0, 500);
+      title = title
+        .trim()
+        .replace(/^[:,-]\s*/, '')
+        .slice(0, 500);
       if (!title) return [];
       const scope: 'household' | 'user' =
         /\b(my|personal|for\s+me)\b/i.test(p) && !/\b(shared|household|family)\b/i.test(p)

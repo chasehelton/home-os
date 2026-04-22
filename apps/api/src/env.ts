@@ -9,6 +9,17 @@ const EnvSchema = z.object({
     .min(32)
     .default('dev-only-secret-change-me-change-me-change-me'),
   HOME_OS_DATA_DIR: z.string().optional(),
+  // Phase 10 — deployment.
+  //   * In dev/test we auto-run pending migrations on startup (ergonomic).
+  //   * In production the compose stack uses a one-shot `migrate` service
+  //     that runs `pnpm --filter=@home-os/db migrate:safe` (snapshot +
+  //     destructive-migration gate) before the api container starts. We set
+  //     this to 'false' there so the server never silently applies schema
+  //     changes to restored data.
+  HOME_OS_AUTO_MIGRATE: z
+    .enum(['true', 'false'])
+    .default('true')
+    .transform((v) => v === 'true'),
 
   // Google OAuth (Phase 1). Login is OIDC-only — refresh tokens for
   // calendar arrive in Phase 5 with separate consent.

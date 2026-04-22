@@ -22,7 +22,9 @@ describe('TokenCrypto', () => {
 
   it('rejects a value sealed under a different key', () => {
     const other = makeTokenCrypto(
-      deriveTokenKey(makeTestEnv({ HOME_OS_SESSION_SECRET: 'a-completely-different-secret-value-123' })),
+      deriveTokenKey(
+        makeTestEnv({ HOME_OS_SESSION_SECRET: 'a-completely-different-secret-value-123' }),
+      ),
     );
     const sealed = other.seal('secret');
     expect(() => c.open(sealed)).toThrow();

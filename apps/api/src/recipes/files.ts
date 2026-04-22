@@ -17,7 +17,7 @@ export function recipeFilePath(dataDir: string, id: string): string {
 export async function writeRecipeMarkdown(
   dataDir: string,
   id: string,
-  markdown: string
+  markdown: string,
 ): Promise<void> {
   const dir = recipesDir(dataDir);
   await fs.mkdir(dir, { recursive: true });

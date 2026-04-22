@@ -27,7 +27,7 @@ export interface DownloadedImage {
 export async function downloadRecipeImage(
   imageUrl: string,
   dataDir: string,
-  recipeId: string
+  recipeId: string,
 ): Promise<DownloadedImage | null> {
   try {
     const result = await safeFetch(imageUrl, {

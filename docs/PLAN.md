@@ -6,33 +6,33 @@ A self-hosted "household OS" for a Raspberry Pi 4 (8GB), with a kitchen touchscr
 
 ## 🚦 Current Status
 
-**Up next: Phase 10 — Deployment & hardening.** Branch `main`; create `phase-10-deploy` after P9 PR merge.
+**Up next: Phase 11 — Reminders & notifications.** Branch `main`; create `phase-11-reminders` after P10 PR merge.
 
-| Phase | Status | PR |
-| --- | --- | --- |
-| P0 Foundation | ✅ merged | #0 (initial) |
-| P1 Identity & Ownership | ✅ merged | #1 |
-| P2 Todos | ✅ merged | #2 |
-| P3 Recipes (defuddle markdown) | ✅ merged | #3 |
-| P4 Meal Planning | ✅ merged | #5 |
-| P5 Calendar READ | ✅ merged | #6 |
-| P6 Calendar UI | ✅ merged | #7 |
-| P7 Calendar WRITE | ✅ merged | #8 |
-| P8 Kiosk shell | ✅ merged | #9 |
-| P9 AI assistant | ✅ PR open | — |
-| **P10 Deploy & hardening** | ⏳ **next** | — |
-| P11 Reminders | pending | — |
+| Phase                          | Status         | PR           |
+| ------------------------------ | -------------- | ------------ |
+| P0 Foundation                  | ✅ merged      | #0 (initial) |
+| P1 Identity & Ownership        | ✅ merged      | #1           |
+| P2 Todos                       | ✅ merged      | #2           |
+| P3 Recipes (defuddle markdown) | ✅ merged      | #3           |
+| P4 Meal Planning               | ✅ merged      | #5           |
+| P5 Calendar READ               | ✅ merged      | #6           |
+| P6 Calendar UI                 | ✅ merged      | #7           |
+| P7 Calendar WRITE              | ✅ merged      | #8           |
+| P8 Kiosk shell                 | ✅ merged      | #9           |
+| P9 AI assistant                | ✅ merged      | #10          |
+| **P10 Deploy & hardening**     | ⏳ **PR open** | —            |
+| P11 Reminders                  | pending        | —            |
 
-**Repo health:** 120/120 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
+**Repo health:** 164/164 tests passing · typecheck + lint + build clean across monorepo · CI green on all PRs.
 
 **To resume in a new session:** read this file, run `git log --oneline -10` to confirm state, check open PRs with `gh pr list`, then branch from the latest `main`.
 
 ---
 
-
 ## 1. Problem & Goals
 
 Build a household app for two users (you + wife) that runs 24/7 on a home Pi, providing:
+
 - Shared & per-user **to-dos**
 - **Meal planning** (week grid)
 - **Recipes** (viewer + URL import)
@@ -68,11 +68,13 @@ home-os/
 ```
 
 **Process model on the Pi:**
+
 - Docker Compose runs: `api` (single instance, sole DB writer), `web` (static files via Caddy), `caddy` (tailnet TLS), `litestream` (separate container pointed at the DB volume).
 - Electron kiosk runs **natively** under systemd (not Docker) to avoid GPU/input-device headaches. It loads `http://localhost/` served by Caddy.
 - **Storage:** see §4a. Current hardware is SD-card-only; we plan around that with aggressive mitigations and a hardware-upgrade path.
 
 **Network model:**
+
 - Tailscale = network boundary. Device is `kitchen.tailnet.ts.net` (MagicDNS).
 - Google OAuth = app identity (allowlist of 2 emails).
 - Kiosk talks to `localhost`. Phones talk to the tailnet hostname over HTTPS (Caddy TLS).
@@ -83,6 +85,7 @@ home-os/
 ## 3. Data & Ownership Model (defined up front)
 
 Every domain entity has explicit scope:
+
 - **`household`** — shared (e.g., shared todos, meal plans, recipes)
 - **`user`** — owned (e.g., a user's personal todos, their Google events)
 - **`kiosk_visible`** — computed boolean controlling what shows on the shared screen (defaults: shared = yes, user = no unless opted-in).
@@ -90,6 +93,7 @@ Every domain entity has explicit scope:
 Kiosk has a simple user switcher (user chip + short PIN) for personal views. Kiosk default view = household/shared.
 
 ### Core tables (initial sketch)
+
 - `users` (id, email, display_name, color, pin_hash)
 - `sessions` (id, user_id, expires_at)
 - `todos` (id, scope, owner_user_id, title, notes, due_at, completed_at, created_by)
@@ -107,17 +111,17 @@ Store encrypted OAuth tokens (libsodium sealed box with a key in `.env` / system
 
 ## 4. Key Technical Decisions (locked from Q&A + critique)
 
-| Area | Decision |
-|---|---|
-| Backend | Fastify + Drizzle + better-sqlite3 (WAL mode, single writer) |
-| Frontend | React + Vite + TS + Tailwind (one web app for kiosk + mobile, responsive + a kiosk layout mode) |
-| Auth | Google OAuth (allowlist) + session cookie; network = Tailscale |
-| Calendar | **Phase 1: read-only mirror**; Phase 2: write for non-recurring user-owned events; recurring/attendees deferred |
+| Area        | Decision                                                                                                                                                                                                                                                                  |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Backend     | Fastify + Drizzle + better-sqlite3 (WAL mode, single writer)                                                                                                                                                                                                              |
+| Frontend    | React + Vite + TS + Tailwind (one web app for kiosk + mobile, responsive + a kiosk layout mode)                                                                                                                                                                           |
+| Auth        | Google OAuth (allowlist) + session cookie; network = Tailscale                                                                                                                                                                                                            |
+| Calendar    | **Phase 1: read-only mirror**; Phase 2: write for non-recurring user-owned events; recurring/attendees deferred                                                                                                                                                           |
 | AI provider | Abstraction in `packages/ai`. Default adapter: **GitHub Copilot** (per-user OAuth device-flow → encrypted GH token at rest → `@github/copilot-sdk` spawns the Copilot CLI per request). Fallbacks: OpenAI, Mock, Disabled. App must be fully functional with AI disabled. |
-| Mobile | PWA (installable, offline-capable). Assume **no reliable iOS background** — server owns sync/reminders/retries. |
-| Deployment | Docker Compose for services + native systemd for Electron |
-| Backups | Litestream continuous replica to S3/B2 + nightly sqlite `.backup` snapshot + **rehearsed restore drill before "production"** |
-| Storage | SD card today (see §4a for SD-specific mitigations + strongly recommended USB-SSD upgrade path) |
+| Mobile      | PWA (installable, offline-capable). Assume **no reliable iOS background** — server owns sync/reminders/retries.                                                                                                                                                           |
+| Deployment  | Docker Compose for services + native systemd for Electron                                                                                                                                                                                                                 |
+| Backups     | Litestream continuous replica to S3/B2 + nightly sqlite `.backup` snapshot + **rehearsed restore drill before "production"**                                                                                                                                              |
+| Storage     | SD card today (see §4a for SD-specific mitigations + strongly recommended USB-SSD upgrade path)                                                                                                                                                                           |
 
 ---
 
@@ -126,9 +130,11 @@ Store encrypted OAuth tokens (libsodium sealed box with a key in `.env` / system
 Current hardware: Raspberry Pi 4 8GB with **SD card only, no SSD**. SD cards on a Pi that's doing constant SQLite writes + Chromium cache + logs are the single most common failure mode for home-server projects. We plan around that.
 
 ### Recommended hardware upgrade (strong)
+
 - Add a **USB 3.0 SSD or high-quality USB flash drive** ($20–40) and mount it at `/mnt/data` for the DB, image cache, and Litestream WAL staging. This is the single highest-leverage purchase for reliability. Plan assumes this will eventually happen; everything below works on SD alone until then.
 
 ### Mitigations while on SD card
+
 1. **Use a high-endurance SD card** (SanDisk High Endurance / Samsung PRO Endurance). These are rated for continuous-write workloads (security cameras, dashcams) and cost ~$15.
 2. **Reduce write amplification:**
    - Mount `/var/log` and browser/Electron caches to **tmpfs** (RAM); 8 GB of RAM easily absorbs it.
@@ -146,6 +152,7 @@ Current hardware: Raspberry Pi 4 8GB with **SD card only, no SSD**. SD cards on 
 6. **Plan for the card dying.** Treat the Pi as disposable: document a one-command provisioning script (`scripts/provision-pi.sh`) that flashes a new card, installs Docker/Tailscale/systemd units, and restores the latest Litestream replica. The restore drill in Phase 10 explicitly tests this end-to-end.
 
 ### Net effect on the plan
+
 - No code changes required from the hardware decision — paths are configurable.
 - Adds a **provisioning script + restore drill** as first-class Phase 10 deliverables (already planned; now promoted).
 - Adds **tmpfs mounts + logrotate + sqlite pragma tuning** to Phase 10 hardening checklist.
@@ -162,6 +169,7 @@ HOME_OS_DATA_DIR=/mnt/data        # <- this is the only thing that changes
 ```
 
 That dir holds:
+
 ```
 /mnt/data/
 ├── db/home-os.sqlite          # SQLite file (WAL + shm alongside)
@@ -173,6 +181,7 @@ That dir holds:
 In `docker-compose.yml` the `api` and `litestream` services bind to `${HOME_OS_DATA_DIR}`. In `packages/db` and `apps/api` the code reads `process.env.HOME_OS_DATA_DIR` (with a dev default of `./.data`). Nothing is hardcoded.
 
 **Migration procedure (~10 minutes, one-time):**
+
 1. Plug in the USB-3.0 SSD; `lsblk` to identify it; format ext4; add to `/etc/fstab` to mount at `/mnt/data` on boot.
 2. `docker compose down` (stops the writer cleanly).
 3. `rsync -aHAX /srv/home-os/data/ /mnt/data/` (or wherever the SD data dir lived).
@@ -183,6 +192,7 @@ In `docker-compose.yml` the `api` and `litestream` services bind to `${HOME_OS_D
 **Safety net during the migration:** Litestream's S3 replica is still intact the entire time, and `scripts/provision-pi.sh --restore` can rebuild from it if anything goes sideways.
 
 **Bonus when the SSD is in place:**
+
 - Can relax some of the SD-specific mitigations (tmpfs for logs is still fine, but cache size limits can grow).
 - Can consider `PRAGMA synchronous=FULL` for extra durability at negligible perf cost on SSD.
 
@@ -193,6 +203,7 @@ In `docker-compose.yml` the `api` and `litestream` services bind to `${HOME_OS_D
 Sequencing revised per critique: schema evolves with features; calendar split into read → UI → write; AI comes late.
 
 ### Phase 0 — Foundation
+
 - Monorepo scaffold (pnpm, TS project refs, ESLint, Prettier, Vitest).
 - Shared `zod` schema infra; API client generator in `packages/shared`.
 - `packages/db`: drizzle setup, WAL mode, migration runner, seed script.
@@ -200,6 +211,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - CI (GitHub Actions): typecheck, lint, test, build for `linux/arm64` and `linux/amd64`.
 
 ### Phase 1 — Identity & Ownership
+
 - Google OAuth login (2-email allowlist).
 - Session cookies (HttpOnly, Secure, SameSite=Lax).
 - User PIN for kiosk quick-switch.
@@ -207,6 +219,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Audit log skeleton.
 
 ### Phase 2 — Todos (first vertical slice end-to-end)
+
 - CRUD API with scope (shared/user), due dates, completion.
 - Web UI: list, add, complete, edit; mobile + kiosk layouts.
 - Optimistic updates + offline queue on the PWA.
@@ -214,6 +227,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Exercises: auth, scope enforcement, optimistic UI, PWA basics.
 
 ### Phase 3 — Recipes ✅
+
 - **Pivoted to markdown-on-disk per user request**: recipe bodies stored at `<dataDir>/recipes/<id>.md`; DB row is a lightweight index (title, sourceUrl, author, siteName, domain, imagePath, importStatus).
 - URL import via **defuddle + linkedom** (Node DOM) → clean markdown.
 - `safeFetch` SSRF guard: blocks private IPv4/IPv6 + CGNAT + multicast, re-checks every redirect hop (`redirect: 'manual'`); size caps (2 MB HTML / 5 MB image), streamed overflow cancel.
@@ -223,6 +237,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Migration `0002_organic_spencer_smythe.sql`. 9 new tests (parse + routes).
 
 ### Phase 4 — Meal Planning ✅
+
 - `meal_plan_entries` table (date YYYY-MM-DD + slot enum + optional `recipeId` FK with `ON DELETE SET NULL` + optional free-text title for leftovers/takeout + notes). Index on (date, slot).
 - REST: `GET /api/meal-plan?weekStart=…` (returns `{from,to,entries}`), `GET /api/meal-plan/tonight` for the kiosk home, plus `POST/PATCH/DELETE` on `/api/meal-plan/:id`.
 - Web UI: new "Meals" tab with a 7-day × 4-slot grid, prev/this/next-week navigation, per-cell add button, modal editor to pick a recipe or enter free text, and a "Tonight: …" banner when today's dinner is planned.
@@ -230,6 +245,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - 9 new tests covering auth, windowing, validation, update/delete, and FK cascade-to-null.
 
 ### Phase 5 — Calendar (READ sync only)
+
 - Google Calendar OAuth connect per user (incremental scopes).
 - Incremental sync via `syncToken` (per user per calendar).
 - Handle `410 Gone` → full resync; store `etag`, `updated`, `status`, `recurringEventId`, `originalStartTime`.
@@ -237,18 +253,21 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Timezone + DST handling (store UTC + original IANA zone).
 
 ### Phase 6 — Calendar UI
+
 - Day / week / agenda views.
 - Kiosk home: today + next-up.
 - Per-user color, filtering, all-day lane.
 - Combined view (both users overlaid) for shared planning.
 
 ### Phase 7 — Calendar WRITE (scoped)
+
 - MVP write scope: **create/edit/delete non-recurring events on the user's primary calendar**.
 - etag-based concurrency; conflict = user prompt, not silent LWW.
 - Recurring events + attendee changes explicitly out of MVP (read-only mirror).
 - `local_dirty` flag for pending pushes; retry worker.
 
 ### Phase 8 — Electron Kiosk shell
+
 - Fullscreen, frameless, hide cursor.
 - Autostart via systemd; auto-relaunch on crash.
 - Screen-wake policy (touch wake; fall-back to `xset`/`wlr-randr` depending on Pi OS).
@@ -258,6 +277,7 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - No-keyboard auth-recovery flow (QR code to mobile to re-auth).
 
 ### Phase 9 — AI assistant ✅
+
 - `packages/ai`: stable `parseIntent(prompt, ctx) → ToolCall[]` interface with tool-schema source of truth (zod + JSON-schema for function calling). Providers: `DisabledProvider`, `MockProvider` (deterministic rules for dev/tests), `OpenAIProvider` (fetch-based, no SDK dep), and **`CopilotProvider`** (default — uses the official `@github/copilot-sdk` npm package).
 - **GitHub Copilot is the primary AI provider.** Each user connects their own GitHub account via OAuth **device flow** (client ID configurable, defaults to the public VS Code Copilot device-flow client). The long-lived GitHub access token is stored encrypted at rest in a new `github_accounts` table (AES-256-GCM, same envelope as Google refresh tokens). On each `parseIntent` call, `CopilotProvider` spawns a short-lived `CopilotClient` (from `@github/copilot-sdk`) authenticated with the user's decrypted token; the SDK wraps the `@github/copilot` CLI binary via JSON-RPC. Our three tools (`create_todo`, `create_event`, `import_recipe`) are registered via `defineTool`, and their handlers only **capture** the proposed args — they never mutate home-os state. Real execution happens later via `/api/ai/execute` after user approval. App remains fully functional with AI disabled or with users who haven't connected GitHub yet (returns `403 github_not_connected` instead of failing hard).
 - Tools shipped this phase: `create_todo`, `create_event`, `import_recipe`. `plan_meals_week` deferred (schema intentionally omitted from the active `ToolCall` union).
@@ -269,21 +289,29 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 - Tests in `packages/ai` (MockProvider, OpenAIProvider, **CopilotProvider** — via an injectable `clientFactory` that fakes the SDK client/session: no-token error, tool capture, schema validation, cleanup on error, tool registration, model plumbing) + AI API integration tests + GitHub device-flow integration tests.
 - **Phase 10 follow-up needed:** `@github/copilot-sdk` transitively installs the `@github/copilot` CLI binary (~130 MB unpacked). Verify an arm64 Linux binary is available before Pi deployment; if not, the API container must run on amd64 or fall back to `HOME_OS_AI_PROVIDER=openai`.
 
-### Phase 10 — Deployment & Hardening
-- `infra/docker`: multi-stage Dockerfiles; `linux/arm64` images built in CI.
-- `docker-compose.yml`: `api`, `web` (static via Caddy), `caddy`, `litestream`. DB volume shared ONLY between `api` and `litestream`.
-- Caddy with Tailscale TLS (tailnet hostname, MagicDNS).
-- systemd units: `home-os-kiosk.service`, update hook, healthchecks.
-- **SD-card hardening (per §4a):** tmpfs mounts for `/var/log` and Electron/Chromium caches; `logrotate`; SQLite pragmas (`journal_mode=WAL`, `synchronous=NORMAL`); configurable data dir so a USB-SSD upgrade is a path change, not a code change.
-- **Backup layers:**
+### Phase 10 — Deployment & Hardening ✅
+
+- `infra/docker/Dockerfile.api` — multi-stage `node:22-bookworm-slim` (glibc, needed for native `better-sqlite3` on arm64), runs as uid 1000, `HOME_OS_AUTO_MIGRATE=false` by default. `infra/docker/Dockerfile.web` — Vite build + `caddy:2-alpine` with SPA fallback.
+- `infra/docker/docker-compose.yml` — five services: `migrate` (one-shot, runs `pnpm --filter=@home-os/db migrate:safe`), `api`, `web`, `caddy` (edge, TLS), `litestream`. `api` depends_on `migrate` with `service_completed_successfully` so migrations are never silently auto-applied. Volume layout: `$DATA/db` shared only between `api` + `litestream` (ro for litestream); `$DATA/recipes`, `$DATA/images`, `$DATA/backups` mounted only into `api`. All containers logged via json-file with `max-size=10m, max-file=5` to cap SD-card churn.
+- `infra/caddy/Caddyfile` — tailnet-facing reverse proxy: `/api/*`, `/auth/*`, `/health/*` → `api:4000`, everything else → `web:8080`. Uses `tls internal` by default; `infra/caddy/README-tailscale.md` documents swapping to Tailscale certs.
+- `infra/litestream/litestream.yml` — continuous WAL replication template (S3/B2).
+- `infra/systemd/home-os.service` — boots the compose stack. `home-os-kiosk.service` (from P8) unchanged.
+- `infra/logrotate/home-os` — rotates host `/var/log/home-os/*.log` (docker logs are capped separately via compose).
+- SQLite pragmas (`journal_mode=WAL`, `synchronous=NORMAL`, `foreign_keys=ON`, `busy_timeout=5000`) already in place from P0.
+- Backup layers:
   - Litestream → S3/B2 (continuous).
-  - Nightly `sqlite3 .backup` snapshot → S3 (separate object, easy point-restore).
-- **`scripts/provision-pi.sh`**: idempotent one-command bootstrap that flashes/sets up a fresh Pi (Docker, Tailscale, systemd units) and restores the latest Litestream replica.
-- **Restore drill**: rehearse full restore to a second Pi (or VM) from S3 before calling it "production". Repeat quarterly.
-- Log rotation; Prometheus-style `/metrics` (optional); liveness/readiness.
-- Migration safety: pre-migration snapshot; destructive migrations gated by manual approval flag.
+  - `scripts/backup-snapshot.sh` — nightly `sqlite3 .backup` + `tar` of `recipes/` and `images/` under `$DATA/backups/<ISO-stamp>/`, prunes archives older than `KEEP_DAYS=14`.
+- `scripts/provision-pi.sh` — idempotent root bootstrap: creates `home-os:1000` user, chowns data tree, installs Docker + Tailscale, clones repo to `/opt/home-os`, restores latest Litestream replica if DB missing (first-time provisioning), installs systemd units + logrotate.
+- `scripts/migrate-with-snapshot.sh` — thin wrapper around `pnpm --filter=@home-os/db migrate:safe`.
+- `scripts/restore-from-litestream.sh` — disaster-recovery drill script; refuses to clobber existing DB without `--force`.
+- Destructive-migration gate: `packages/db/src/destructive.ts` statically scans pending migration SQL (normalized: strips `--` and `/* */` comments, case-insensitive, splits on `;` and drizzle statement-breakpoints) for `DROP TABLE`, `ALTER TABLE ... DROP COLUMN`, and the drizzle recreate pattern (`CREATE TABLE __new_*` + `INSERT ... SELECT` + `DROP TABLE`). Refuses to run unless `HOME_OS_ALLOW_DESTRUCTIVE_MIGRATIONS=1` or `--allow-destructive`. Pending set computed from the `__drizzle_migrations` applied-count against `meta/_journal.json`, so only actually-pending migrations are scanned.
+- Pre-migration snapshot: `packages/db/src/snapshot.ts` uses better-sqlite3's online `.backup()` API — safe to run on an active WAL DB.
+- API server honors `HOME_OS_AUTO_MIGRATE` (default `true` for dev; `false` in compose) to prevent the API container from silently applying migrations on restart.
+- CI: `.github/workflows/docker.yml` builds both images for `linux/amd64 + linux/arm64` on every PR touching infra or app code; pushes to GHCR gated on the `PUSH_GHCR` repo variable so PRs don't need registry creds.
+- Tests: 16 new in `packages/db/test/` (destructive scanner — 10; snapshot helper — 4; pending enumeration — 2). All 164 tests pass; typecheck + lint + build clean.
 
 ### Phase 11 — Reminders & Notifications (post-MVP polish but called out)
+
 - Server-owned reminder scheduler (cron + queue in SQLite).
 - Push via Web Push for PWA (best-effort; iOS caveats documented).
 - Kiosk toast/banner for active reminders.
@@ -292,16 +320,16 @@ Sequencing revised per critique: schema evolves with features; calendar split in
 
 ## 6. Risks & Mitigations
 
-| Risk | Mitigation |
-|---|---|
-| Bad migration corrupts household data | Pre-migration snapshot; restore drill; destructive-migration gate |
-| Google sync edge cases (recurring, deletes, 410) | Scope MVP to non-recurring write; handle 410 with full resync; store etag/status/recurring fields up front |
-| GitHub Copilot SDK / model availability changes | Provider abstraction swaps in OpenAI/Anthropic/Mock without touching routes; `HOME_OS_COPILOT_MODEL` is a single env var to pick a different model; app works without AI |
-| SD card corruption / slow IO | High-endurance card; tmpfs for logs/caches; WAL+synchronous=NORMAL; Litestream + nightly snapshot; one-command reprovision script; USB-SSD upgrade path |
-| Kiosk becomes unrecoverable | Auto-relaunch; QR-to-mobile reauth; cleaning mode; crash screen |
-| iOS PWA limits break reminders | Server owns scheduling and retries |
-| Multiple DB writers | Single API instance; Litestream is the only other process touching the DB file |
-| TLS / OAuth callback URL drift | Lock tailnet hostname early; configure Google OAuth redirect to it |
+| Risk                                             | Mitigation                                                                                                                                                               |
+| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Bad migration corrupts household data            | Pre-migration snapshot; restore drill; destructive-migration gate                                                                                                        |
+| Google sync edge cases (recurring, deletes, 410) | Scope MVP to non-recurring write; handle 410 with full resync; store etag/status/recurring fields up front                                                               |
+| GitHub Copilot SDK / model availability changes  | Provider abstraction swaps in OpenAI/Anthropic/Mock without touching routes; `HOME_OS_COPILOT_MODEL` is a single env var to pick a different model; app works without AI |
+| SD card corruption / slow IO                     | High-endurance card; tmpfs for logs/caches; WAL+synchronous=NORMAL; Litestream + nightly snapshot; one-command reprovision script; USB-SSD upgrade path                  |
+| Kiosk becomes unrecoverable                      | Auto-relaunch; QR-to-mobile reauth; cleaning mode; crash screen                                                                                                          |
+| iOS PWA limits break reminders                   | Server owns scheduling and retries                                                                                                                                       |
+| Multiple DB writers                              | Single API instance; Litestream is the only other process touching the DB file                                                                                           |
+| TLS / OAuth callback URL drift                   | Lock tailnet hostname early; configure Google OAuth redirect to it                                                                                                       |
 
 ---
 
