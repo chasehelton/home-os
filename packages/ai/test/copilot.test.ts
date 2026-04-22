@@ -4,32 +4,16 @@ import { CopilotProvider, CopilotNoTokenError } from '../src/copilot.js';
 const NOW = new Date('2026-04-22T12:00:00Z');
 const ctx = { userId: 'u1', now: NOW };
 
-// Returns a fetch double that routes by URL to either the session-token
-// endpoint or the chat-completions endpoint. Lets us assert both phases
-// of the Copilot auth exchange without an in-memory HTTP server.
-function routedFetch(handlers: {
-  session: (req: { url: string; init: RequestInit }) => Response | Promise<Response>;
-  chat: (req: { url: string; init: RequestInit }) => Response | Promise<Response>;
-}) {
-  return vi.fn(async (url: string, init: RequestInit) => {
-    if (url.includes('/copilot_internal/v2/token')) {
-      return handlers.session({ url, init });
-    }
-    if (url.includes('/chat/completions')) {
-      return handlers.chat({ url, init });
-    }
-    throw new Error(`unrouted fetch: ${url}`);
+function mockFetch(response: unknown, status = 200) {
+  return vi.fn(async () => {
+    return new Response(JSON.stringify(response), {
+      status,
+      headers: { 'content-type': 'application/json' },
+    });
   }) as unknown as typeof fetch;
 }
 
-function json(obj: unknown, status = 200): Response {
-  return new Response(JSON.stringify(obj), {
-    status,
-    headers: { 'content-type': 'application/json' },
-  });
-}
-
-describe('CopilotProvider', () => {
+describe('CopilotProvider (GitHub Models backend)', () => {
   it('throws CopilotNoTokenError when user has no GitHub token', async () => {
     const p = new CopilotProvider({
       getGithubToken: () => null,
@@ -38,30 +22,25 @@ describe('CopilotProvider', () => {
     await expect(p.parseIntent('hi', ctx)).rejects.toBeInstanceOf(CopilotNoTokenError);
   });
 
-  it('exchanges GH token for session token and parses tool_calls', async () => {
-    const fetchImpl = routedFetch({
-      session: () =>
-        json({ token: 'copilot-sess-1', expires_at: Math.floor(Date.now() / 1000) + 1800 }),
-      chat: () =>
-        json({
-          choices: [
-            {
-              message: {
-                content: null,
-                tool_calls: [
-                  {
-                    id: 'c1',
-                    type: 'function',
-                    function: {
-                      name: 'create_todo',
-                      arguments: JSON.stringify({ title: 'milk', scope: 'household' }),
-                    },
-                  },
-                ],
+  it('calls GitHub Models inference endpoint with the GH token as bearer', async () => {
+    const fetchImpl = mockFetch({
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              {
+                id: 'c1',
+                type: 'function',
+                function: {
+                  name: 'create_todo',
+                  arguments: JSON.stringify({ title: 'milk', scope: 'household' }),
+                },
               },
-            },
-          ],
-        }),
+            ],
+          },
+        },
+      ],
     });
     const p = new CopilotProvider({ getGithubToken: () => 'gho_abc', fetchImpl });
     const out = await p.parseIntent('add milk', ctx);
@@ -69,83 +48,57 @@ describe('CopilotProvider', () => {
       { tool: 'create_todo', args: { title: 'milk', scope: 'household' } },
     ]);
 
-    const calls = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls;
-    expect(calls).toHaveLength(2);
-    expect(String(calls[0]![0])).toContain('/copilot_internal/v2/token');
-    expect((calls[0]![1] as RequestInit).headers).toMatchObject({ authorization: 'token gho_abc' });
-    expect(String(calls[1]![0])).toContain('/chat/completions');
-    const chatHeaders = (calls[1]![1] as RequestInit).headers as Record<string, string>;
-    expect(chatHeaders.authorization).toBe('Bearer copilot-sess-1');
-    expect(chatHeaders['copilot-integration-id']).toBe('vscode-chat');
+    expect(fetchImpl).toHaveBeenCalledOnce();
+    const call = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;
+    expect(String(call[0])).toContain('models.github.ai/inference/chat/completions');
+    const init = call[1] as RequestInit;
+    expect(init.headers).toMatchObject({ authorization: 'Bearer gho_abc' });
+    const body = JSON.parse(init.body as string) as { model: string; tools: unknown[] };
+    expect(body.model).toMatch(/^[a-z0-9-]+\/.+/);
+    expect(body.tools.length).toBeGreaterThan(0);
   });
 
-  it('caches session tokens across calls', async () => {
-    let sessionCalls = 0;
-    const fetchImpl = routedFetch({
-      session: () => {
-        sessionCalls += 1;
-        return json({ token: 'sess-a', expires_at: Math.floor(Date.now() / 1000) + 1800 });
-      },
-      chat: () => json({ choices: [{ message: { tool_calls: [] } }] }),
+  it('respects custom model and base URL', async () => {
+    const fetchImpl = mockFetch({ choices: [{ message: { tool_calls: [] } }] });
+    const p = new CopilotProvider({
+      getGithubToken: () => 'gho_abc',
+      model: 'meta/llama-3.1-70b-instruct',
+      baseUrl: 'https://models.example.test',
+      fetchImpl,
+    });
+    await p.parseIntent('hi', ctx);
+    const call = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;
+    expect(String(call[0])).toBe('https://models.example.test/inference/chat/completions');
+    const body = JSON.parse((call[1] as RequestInit).body as string) as { model: string };
+    expect(body.model).toBe('meta/llama-3.1-70b-instruct');
+  });
+
+  it('returns [] when the model chose no tool', async () => {
+    const fetchImpl = mockFetch({
+      choices: [{ message: { content: 'hi', tool_calls: [] } }],
     });
     const p = new CopilotProvider({ getGithubToken: () => 'gho_abc', fetchImpl });
-    await p.parseIntent('a', ctx);
-    await p.parseIntent('b', ctx);
-    expect(sessionCalls).toBe(1);
+    expect(await p.parseIntent('hi', ctx)).toEqual([]);
   });
 
-  it('refreshes session token when GitHub token rotates', async () => {
-    let sessionCalls = 0;
-    let current = 'gho_first';
-    const fetchImpl = routedFetch({
-      session: () => {
-        sessionCalls += 1;
-        return json({
-          token: `sess-${sessionCalls}`,
-          expires_at: Math.floor(Date.now() / 1000) + 1800,
-        });
-      },
-      chat: () => json({ choices: [{ message: { tool_calls: [] } }] }),
-    });
-    const p = new CopilotProvider({ getGithubToken: () => current, fetchImpl });
-    await p.parseIntent('a', ctx);
-    current = 'gho_second';
-    await p.parseIntent('b', ctx);
-    expect(sessionCalls).toBe(2);
-  });
-
-  it('throws on chat HTTP error and invalidates cache on 401', async () => {
-    let sessionCalls = 0;
-    const fetchImpl = routedFetch({
-      session: () => {
-        sessionCalls += 1;
-        return json({ token: `sess-${sessionCalls}`, expires_at: Math.floor(Date.now() / 1000) + 1800 });
-      },
-      chat: () => json({ error: 'unauthorized' }, 401),
-    });
+  it('throws on non-2xx HTTP', async () => {
+    const fetchImpl = mockFetch({ error: 'bad' }, 500);
     const p = new CopilotProvider({ getGithubToken: () => 'gho_abc', fetchImpl });
-    await expect(p.parseIntent('x', ctx)).rejects.toThrow(/copilot_http_401/);
-    // Next call should re-exchange because the 401 cleared the cache.
-    await expect(p.parseIntent('y', ctx)).rejects.toThrow(/copilot_http_401/);
-    expect(sessionCalls).toBe(2);
+    await expect(p.parseIntent('x', ctx)).rejects.toThrow(/copilot_http_500/);
   });
 
   it('drops invalid tool_calls silently', async () => {
-    const fetchImpl = routedFetch({
-      session: () => json({ token: 's', expires_at: Math.floor(Date.now() / 1000) + 1800 }),
-      chat: () =>
-        json({
-          choices: [
-            {
-              message: {
-                tool_calls: [
-                  { function: { name: 'unknown_tool', arguments: '{}' } },
-                  { function: { name: 'create_todo', arguments: JSON.stringify({ scope: 'nope' }) } },
-                ],
-              },
-            },
-          ],
-        }),
+    const fetchImpl = mockFetch({
+      choices: [
+        {
+          message: {
+            tool_calls: [
+              { function: { name: 'unknown_tool', arguments: '{}' } },
+              { function: { name: 'create_todo', arguments: JSON.stringify({ scope: 'nope' }) } },
+            ],
+          },
+        },
+      ],
     });
     const p = new CopilotProvider({ getGithubToken: () => 'gho_abc', fetchImpl });
     expect(await p.parseIntent('x', ctx)).toEqual([]);

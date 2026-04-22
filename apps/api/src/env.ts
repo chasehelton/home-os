@@ -30,14 +30,17 @@ const EnvSchema = z.object({
   HOME_OS_OPENAI_API_KEY: z.string().optional(),
   HOME_OS_OPENAI_MODEL: z.string().default('gpt-4o-mini'),
   HOME_OS_OPENAI_BASE_URL: z.string().url().default('https://api.openai.com'),
-  // GitHub Copilot adapter.
-  //   CLIENT_ID defaults to the VS Code device-flow client, which is publicly
-  //   known and the same one used by the official Copilot Chat extension.
-  //   Override only if you've registered your own GitHub OAuth/Copilot app.
-  //   MODEL defaults to 'gpt-4o-mini' which the Copilot backend exposes.
+  // GitHub Copilot adapter — backed by the public GitHub Models API
+  // (https://docs.github.com/en/rest/models). Users auth via per-user
+  // OAuth device flow; their GitHub token is used directly as the bearer.
+  //   CLIENT_ID defaults to the VS Code device-flow client (public, issues
+  //   tokens with the `read:user` scope we ask for). Override only if you
+  //   registered your own GitHub OAuth app.
+  //   MODEL uses publisher/name addressing (e.g. openai/gpt-4o-mini,
+  //   meta/llama-3.1-70b-instruct, mistral-ai/mistral-large, ...).
   HOME_OS_GITHUB_CLIENT_ID: z.string().default('Iv1.b507a08c87ecfe98'),
-  HOME_OS_COPILOT_MODEL: z.string().default('gpt-4o-mini'),
-  HOME_OS_COPILOT_BASE_URL: z.string().url().default('https://api.githubcopilot.com'),
+  HOME_OS_COPILOT_MODEL: z.string().default('openai/gpt-4o-mini'),
+  HOME_OS_COPILOT_BASE_URL: z.string().url().default('https://models.github.ai'),
   // Phase 5: 32-byte key (hex or base64) used to encrypt Google refresh
   // tokens at rest. REQUIRED in production; derived from the session secret
   // in dev/test for ergonomics.

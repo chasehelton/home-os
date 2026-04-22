@@ -5,7 +5,6 @@ export { OpenAIProvider, type OpenAIProviderOptions } from './openai.js';
 export {
   CopilotProvider,
   CopilotNoTokenError,
-  copilotChatHeaders,
   type CopilotProviderOptions,
   type GithubTokenProvider,
 } from './copilot.js';

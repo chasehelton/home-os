@@ -2,21 +2,25 @@ import type { AiContext, AiProvider } from './provider.js';
 import { ToolCall, OPENAI_TOOLS } from './tools.js';
 
 // ---------------------------------------------------------------------------
-// GitHub Copilot adapter.
+// GitHub Models adapter ("copilot" provider).
 //
-// Uses the GitHub Copilot chat-completions endpoint, which is OpenAI-compatible
-// (same tool-call contract as OpenAIProvider). Authentication is a two-step
-// exchange:
-//   1. `ghTokenProvider(userId)` returns the user's long-lived GitHub OAuth
-//      access token (stored encrypted in `github_accounts`).
-//   2. We POST that token to `api.github.com/copilot_internal/v2/token` to
-//      get a short-lived Copilot session token (expires in ~30 min). The
-//      session token is what authorizes chat-completions calls.
+// Uses the officially-public GitHub Models inference API:
+//   POST https://models.github.ai/inference/chat/completions
+//   Authorization: Bearer <GitHub user token>
 //
-// The Copilot token endpoint is technically undocumented but has been the
-// stable auth path used by the VS Code Copilot extension for years. If the
-// user has no GitHub connection, we throw `CopilotNoTokenError` so the route
-// can return a structured error asking the user to connect.
+// The endpoint is OpenAI-compatible (same tool-call contract as OpenAIProvider)
+// and is documented at https://docs.github.com/en/rest/models. Authentication
+// is a single-step: we send the user's long-lived GitHub OAuth access token
+// directly — no session-token exchange, no undocumented endpoints.
+//
+// Models are addressed as `publisher/name` (e.g. `openai/gpt-4o-mini`). The
+// default is chosen for low-cost tool-call use; operators can override via
+// HOME_OS_COPILOT_MODEL to pick any model available on GitHub Models
+// (openai/*, meta/*, mistral-ai/*, microsoft/*, etc.).
+//
+// We still call the provider "copilot" because that's how users think about
+// it ("my GitHub Copilot subscription") — but the wire protocol is the public
+// Models API, not the internal Copilot Chat endpoint.
 // ---------------------------------------------------------------------------
 
 export class CopilotNoTokenError extends Error {
@@ -34,13 +38,6 @@ export interface CopilotProviderOptions {
   model?: string;
   baseUrl?: string;
   fetchImpl?: typeof fetch;
-  /** Override 'now' for deterministic tests of session-token caching. */
-  nowFn?: () => number;
-}
-
-interface CopilotSessionToken {
-  token: string;
-  expiresAtMs: number;
 }
 
 interface ChatToolCall {
@@ -68,23 +65,17 @@ export class CopilotProvider implements AiProvider {
   private readonly model: string;
   private readonly baseUrl: string;
   private readonly fetchImpl: typeof fetch;
-  private readonly nowFn: () => number;
-  // Per-user Copilot session-token cache. Keyed by the underlying GitHub
-  // access token so rotating the GH token invalidates the cache automatically.
-  private readonly sessionCache = new Map<string, CopilotSessionToken>();
 
   constructor(opts: CopilotProviderOptions) {
     this.getGithubToken = opts.getGithubToken;
-    this.model = opts.model ?? 'gpt-4o-mini';
-    this.baseUrl = (opts.baseUrl ?? 'https://api.githubcopilot.com').replace(/\/+$/, '');
+    this.model = opts.model ?? 'openai/gpt-4o-mini';
+    this.baseUrl = (opts.baseUrl ?? 'https://models.github.ai').replace(/\/+$/, '');
     this.fetchImpl = opts.fetchImpl ?? fetch;
-    this.nowFn = opts.nowFn ?? Date.now;
   }
 
   async parseIntent(prompt: string, ctx: AiContext): Promise<ToolCall[]> {
     const ghToken = await this.getGithubToken(ctx.userId);
     if (!ghToken) throw new CopilotNoTokenError();
-    const copilotToken = await this.getSessionToken(ghToken);
 
     const body = {
       model: this.model,
@@ -101,15 +92,17 @@ export class CopilotProvider implements AiProvider {
       tool_choice: 'auto',
     };
 
-    const res = await this.fetchImpl(`${this.baseUrl}/chat/completions`, {
+    const res = await this.fetchImpl(`${this.baseUrl}/inference/chat/completions`, {
       method: 'POST',
-      headers: copilotChatHeaders(copilotToken),
+      headers: {
+        'content-type': 'application/json',
+        authorization: `Bearer ${ghToken}`,
+        accept: 'application/json',
+        'user-agent': 'home-os/1.0',
+      },
       body: JSON.stringify(body),
     });
     if (!res.ok) {
-      // If the session token was just rejected, clear the cache so next call
-      // re-exchanges — handles the race where a cached token expires mid-flight.
-      if (res.status === 401) this.sessionCache.delete(ghToken);
       const text = await res.text().catch(() => '');
       throw new Error(`copilot_http_${res.status}: ${text.slice(0, 200)}`);
     }
@@ -132,42 +125,4 @@ export class CopilotProvider implements AiProvider {
     }
     return out;
   }
-
-  private async getSessionToken(ghToken: string): Promise<string> {
-    const cached = this.sessionCache.get(ghToken);
-    // Refresh 60s before actual expiry to avoid mid-request invalidation.
-    if (cached && cached.expiresAtMs - this.nowFn() > 60_000) {
-      return cached.token;
-    }
-    const res = await this.fetchImpl('https://api.github.com/copilot_internal/v2/token', {
-      method: 'GET',
-      headers: {
-        authorization: `token ${ghToken}`,
-        accept: 'application/json',
-        'user-agent': 'home-os/1.0',
-      },
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      throw new Error(`copilot_session_http_${res.status}: ${text.slice(0, 200)}`);
-    }
-    const data = (await res.json()) as { token?: string; expires_at?: number };
-    if (!data.token) throw new Error('copilot_session_missing_token');
-    const expiresAtMs =
-      typeof data.expires_at === 'number' ? data.expires_at * 1000 : this.nowFn() + 25 * 60_000;
-    this.sessionCache.set(ghToken, { token: data.token, expiresAtMs });
-    return data.token;
-  }
-}
-
-export function copilotChatHeaders(copilotToken: string): Record<string, string> {
-  return {
-    'content-type': 'application/json',
-    authorization: `Bearer ${copilotToken}`,
-    'editor-version': 'home-os/1.0',
-    'editor-plugin-version': 'home-os-ai/0.1',
-    'copilot-integration-id': 'vscode-chat',
-    'openai-intent': 'conversation-panel',
-    'user-agent': 'home-os/1.0',
-  };
 }
