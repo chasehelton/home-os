@@ -9,6 +9,13 @@ import { initialHealthState, onHealthResult, type HealthState } from './health.j
 
 const cfg: KioskConfig = loadConfig();
 
+// Chromium flags for touchscreen kiosks: force touch-event dispatch, disable
+// pinch-zoom (triggered accidentally by two-finger UI taps), and kill the
+// overscroll-based history-back gesture so a drag never navigates away.
+app.commandLine.appendSwitch('touch-events', 'enabled');
+app.commandLine.appendSwitch('disable-pinch');
+app.commandLine.appendSwitch('overscroll-history-navigation', '0');
+
 // ---------------------------------------------------------------------------
 // BrowserWindow options — Electron security hardening: no nodeIntegration,
 // contextIsolation on, sandboxed preload. Preload is the only bridge.
