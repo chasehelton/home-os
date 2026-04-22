@@ -1,0 +1,25 @@
+# home-os — local development Caddyfile.
+#
+# Plain HTTP on :8080, matches any Host (so http://localhost:8080,
+# http://127.0.0.1:8080, and http://<lan-ip>:8080 all work).
+#
+# Used by infra/docker/docker-compose.local.yml. NOT used in production —
+# production uses the sibling Caddyfile with tls internal + tailnet host.
+
+{
+	admin off
+	auto_https off
+	log {
+		output stdout
+		format json
+	}
+}
+
+:8080 {
+	encode zstd gzip
+
+	@api path /api/* /auth/* /health/*
+	reverse_proxy @api api:4000
+
+	reverse_proxy web:8080
+}

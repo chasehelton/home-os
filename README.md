@@ -81,6 +81,27 @@ sudo systemctl enable --now home-os.service
 repo to `/opt/home-os`, and — if no local DB exists — restores the latest
 Litestream replica before the API ever starts.
 
+### Local verification of the production containers
+
+To smoke-test the prod api + web images on your workstation (no GHCR, no
+tailnet, no Litestream), layer the local override on top of the prod compose
+file:
+
+```bash
+docker compose \
+  -f infra/docker/docker-compose.yml \
+  -f infra/docker/docker-compose.local.yml \
+  --env-file .env \
+  up --build
+
+# Web app:  http://localhost:8080
+# API:      http://localhost:4000/health/live
+```
+
+The override builds api + web from the Dockerfiles in-tree, swaps Caddy for
+a plain-HTTP reverse-proxy on `:8080` that accepts any Host header, and
+disables Litestream.
+
 ### Migration safety
 
 In production, the API container sets `HOME_OS_AUTO_MIGRATE=false`. The

@@ -35,3 +35,6 @@ apps/kiosk/out/
 # logs
 *.log
 logs/
+
+# generated jsdoc/docdash output
+/doc/
