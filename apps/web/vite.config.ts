@@ -27,7 +27,9 @@ export default defineConfig({
     }),
   ],
   server: {
+    host: '0.0.0.0',
     port: 5173,
+    allowedHosts: ['pi4.tailebbd07.ts.net'],
     proxy: {
       '/api': { target: 'http://localhost:4000', changeOrigin: true },
       '/auth': { target: 'http://localhost:4000', changeOrigin: true },
