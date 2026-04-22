@@ -45,10 +45,28 @@ for cmd in node tailscale; do
   fi
 done
 
-# pnpm commonly lives under ~/.local/share/pnpm or corepack shims that root
-# doesn't see. Resolve it in the run user's login shell.
-PNPM_BIN="$(sudo -u "$RUN_USER" -H bash -lc 'command -v pnpm' 2>/dev/null || true)"
+# pnpm commonly lives under ~/.npm-global/bin (corepack-via-npm),
+# ~/.local/share/pnpm (pnpm standalone installer), or similar — none of
+# which are on root's or a login shell's PATH. Probe known locations as
+# the run user, then fall back to their interactive shell's PATH.
+RUN_USER_HOME="$(getent passwd "$RUN_USER" | cut -d: -f6)"
+PNPM_BIN=""
+for candidate in \
+  "${RUN_USER_HOME}/.npm-global/bin/pnpm" \
+  "${RUN_USER_HOME}/.local/share/pnpm/pnpm" \
+  "${RUN_USER_HOME}/.local/bin/pnpm" \
+  "/usr/local/bin/pnpm" \
+  "/usr/bin/pnpm"; do
+  if [ -x "$candidate" ]; then
+    PNPM_BIN="$candidate"
+    break
+  fi
+done
 if [ -z "$PNPM_BIN" ]; then
+  # Last resort: ask bash in interactive mode so it sources ~/.bashrc.
+  PNPM_BIN="$(sudo -u "$RUN_USER" -H bash -ic 'command -v pnpm' 2>/dev/null | tr -d '\r' || true)"
+fi
+if [ -z "$PNPM_BIN" ] || [ ! -x "$PNPM_BIN" ]; then
   echo "ERROR: \`pnpm\` not found for user ${RUN_USER}. Install it (e.g. \`corepack enable && corepack prepare pnpm@latest --activate\`) and retry." >&2
   exit 1
 fi
@@ -70,14 +88,14 @@ chown -R "${RUN_USER}:${RUN_USER}" "$DATA_DIR"
 # 3. Build the app (so the systemd unit has something to start).
 # -----------------------------------------------------------------------------
 echo "==> pnpm install + build"
-sudo -u "$RUN_USER" -H bash -lc "cd '${REPO_DIR}' && pnpm install --frozen-lockfile && pnpm build"
+sudo -u "$RUN_USER" -H bash -lc "cd '${REPO_DIR}' && '${PNPM_BIN}' install --frozen-lockfile && '${PNPM_BIN}' build"
 
 # -----------------------------------------------------------------------------
 # 4. Apply migrations via the safe path.
 # -----------------------------------------------------------------------------
 echo "==> running safe migrations"
 sudo -u "$RUN_USER" -H bash -lc \
-  "cd '${REPO_DIR}' && HOME_OS_DATA_DIR='${DATA_DIR}' pnpm --filter=@home-os/db migrate:safe"
+  "cd '${REPO_DIR}' && HOME_OS_DATA_DIR='${DATA_DIR}' '${PNPM_BIN}' --filter=@home-os/db migrate:safe"
 
 # -----------------------------------------------------------------------------
 # 5. Install & enable the systemd unit.
