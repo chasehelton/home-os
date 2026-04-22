@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { Reminder } from '@home-os/shared';
+import { Button } from './ui/Button';
 
 interface Props {
   /** How often to poll /api/reminders/active (ms). 0 disables. */
@@ -42,25 +43,28 @@ export function ReminderBanner({ intervalMs = 20_000 }: Props) {
     <div
       role="status"
       aria-live="polite"
-      className="flex flex-col gap-2 border-b border-amber-800 bg-amber-900/40 px-4 py-3"
+      className="flex flex-col gap-2 border-b border-outline-variant/60 bg-secondary-container/70 px-4 py-3 text-secondary-on-container md:px-6"
     >
       {rows.map((r) => (
         <div key={r.id} className="flex items-center justify-between gap-3">
-          <div>
-            <div className="text-sm font-medium text-amber-100">
-              🔔 {r.title}
-              <span className="ml-2 text-xs text-amber-300">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 text-body-md font-medium">
+              <span aria-hidden>🔔</span>
+              <span className="truncate">{r.title}</span>
+              <span className="shrink-0 text-label-sm opacity-80">
                 {r.scope === 'household' ? 'household' : 'for you'}
               </span>
             </div>
-            {r.body && <div className="text-xs text-amber-200/80">{r.body}</div>}
+            {r.body && <div className="truncate text-label-md opacity-80">{r.body}</div>}
           </div>
-          <button
+          <Button
+            size="sm"
+            variant="secondary"
             onClick={() => void dismiss(r.id)}
-            className="rounded bg-amber-800 px-3 py-1 text-xs font-medium text-amber-50 hover:bg-amber-700"
+            className="shrink-0"
           >
             Dismiss
-          </button>
+          </Button>
         </div>
       ))}
     </div>

@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
 import { disablePush, enablePush, getExistingSubscription, pushSupported } from '../lib/push';
+import { useTheme, type ThemeMode } from '../lib/theme';
+import { Button, ButtonLink } from './ui/Button';
+import { Card, CardHeader } from './ui/Card';
+import { Badge } from './ui/Badge';
+import { PageHeader } from './ui/PageHeader';
+import { SegmentedTabs } from './ui/Tabs';
 
 interface CalendarRow {
   id: string;
@@ -18,6 +24,7 @@ interface AccountRow {
 }
 
 export function Settings() {
+  const { mode, setMode } = useTheme();
   const [accounts, setAccounts] = useState<AccountRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
@@ -94,45 +101,54 @@ export function Settings() {
   }
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-baseline justify-between">
-        <h2 className="text-2xl font-semibold">Settings</h2>
-      </header>
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 md:px-margin md:py-lg">
+      <PageHeader title="Settings" description="Tune home-os to fit the household." />
 
-      <div className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-900/40 p-5">
-        <h3 className="text-lg font-medium">Google Calendar</h3>
-        <p className="text-sm text-slate-400">
-          Read-only sync of your Google calendars. Events refresh automatically every few minutes.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <a
-            href="/auth/google/calendar/connect"
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
-          >
+      <Card variant="outline" padding="md">
+        <CardHeader
+          title="Appearance"
+          description="Match the light of the room, or follow whatever the device is set to."
+        />
+        <SegmentedTabs<ThemeMode>
+          value={mode}
+          onChange={setMode}
+          tabs={[
+            { id: 'system', label: 'System' },
+            { id: 'light', label: 'Light' },
+            { id: 'dark', label: 'Dark' },
+          ]}
+        />
+      </Card>
+
+      <Card variant="outline" padding="md">
+        <CardHeader
+          title="Google Calendar"
+          description="Read-only sync of your Google calendars. Events refresh automatically every few minutes."
+        />
+        <div className="flex flex-wrap gap-2">
+          <ButtonLink href="/auth/google/calendar/connect" variant="primary">
             Connect Google Calendar
-          </a>
-          <button
+          </ButtonLink>
+          <Button
+            variant="tonal"
             onClick={() => void syncNow()}
             disabled={busy !== null || accounts.length === 0}
-            className="rounded bg-slate-700 px-4 py-2 text-sm hover:bg-slate-600 disabled:opacity-50"
           >
             {busy === 'sync' ? 'Syncing…' : 'Sync now'}
-          </button>
+          </Button>
         </div>
-      </div>
+      </Card>
 
-      <div className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-900/40 p-5">
-        <h3 className="text-lg font-medium">Notifications</h3>
-        <p className="text-sm text-slate-400">
-          Fired reminders always appear in the banner and on the kiosk. Turn on push to also get
-          system notifications on this device. iOS requires the PWA to be installed to the Home
-          Screen first.
-        </p>
-        <div className="flex flex-wrap gap-2 pt-2">
-          <button
+      <Card variant="outline" padding="md">
+        <CardHeader
+          title="Notifications"
+          description="Fired reminders always appear in the banner and on the kiosk. Turn on push to also get system notifications on this device. iOS requires the PWA to be installed to the Home Screen first."
+        />
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
             onClick={() => void togglePush()}
             disabled={pushBusy || !pushSupported()}
-            className="rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
+            variant="primary"
           >
             {pushBusy
               ? pushEnabled
@@ -141,62 +157,70 @@ export function Settings() {
               : pushEnabled
                 ? 'Disable push on this device'
                 : 'Enable push on this device'}
-          </button>
+          </Button>
           {!pushSupported() && (
-            <span className="self-center text-xs text-slate-400">
+            <span className="text-label-md text-on-surface-variant">
               Push not supported in this browser.
             </span>
           )}
         </div>
         {pushError && (
-          <div className="rounded bg-red-900/40 p-3 text-sm text-red-200">{pushError}</div>
+          <div className="mt-3 rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+            {pushError}
+          </div>
         )}
-      </div>
+      </Card>
 
-      {error && <div className="rounded bg-red-900/40 p-3 text-sm text-red-200">{error}</div>}
+      {error && (
+        <div className="rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-body-md text-on-surface-variant">Loading…</div>
       ) : accounts.length === 0 ? (
-        <div className="text-slate-400">No calendar accounts connected yet.</div>
+        <div className="text-body-md text-on-surface-variant">
+          No calendar accounts connected yet.
+        </div>
       ) : (
         <ul className="flex flex-col gap-3">
           {accounts.map((a) => (
-            <li
-              key={a.id}
-              className="flex flex-col gap-2 rounded border border-slate-800 bg-slate-900/40 p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="font-medium">{a.email}</div>
-                  <div className="text-xs text-slate-400">
-                    Status: {a.status}
-                    {a.lastError ? ` · last error: ${a.lastError}` : ''}
+            <li key={a.id}>
+              <Card variant="outline" padding="md" className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-body-md font-medium text-on-surface">
+                      {a.email}
+                    </div>
+                    <div className="mt-0.5 text-label-md text-on-surface-variant">
+                      Status: {a.status}
+                      {a.lastError ? ` · last error: ${a.lastError}` : ''}
+                    </div>
                   </div>
+                  <Button
+                    size="sm"
+                    variant="danger"
+                    onClick={() => void disconnect(a.id)}
+                    disabled={busy !== null}
+                  >
+                    {busy === a.id ? 'Removing…' : 'Disconnect'}
+                  </Button>
                 </div>
-                <button
-                  onClick={() => void disconnect(a.id)}
-                  disabled={busy !== null}
-                  className="rounded bg-red-800 px-3 py-1 text-xs hover:bg-red-700 disabled:opacity-50"
-                >
-                  {busy === a.id ? 'Removing…' : 'Disconnect'}
-                </button>
-              </div>
-              {a.calendars.length > 0 && (
-                <ul className="flex flex-col gap-1 text-sm text-slate-300">
-                  {a.calendars.map((c) => (
-                    <li key={c.id} className="flex items-center gap-2">
-                      <span className="text-slate-500">•</span>
-                      <span>{c.summary}</span>
-                      {c.primary && (
-                        <span className="rounded bg-slate-800 px-1.5 text-xs text-slate-400">
-                          primary
+                {a.calendars.length > 0 && (
+                  <ul className="flex flex-col gap-1.5 text-body-md text-on-surface">
+                    {a.calendars.map((c) => (
+                      <li key={c.id} className="flex items-center gap-2">
+                        <span className="text-on-surface-variant" aria-hidden>
+                          •
                         </span>
-                      )}
-                    </li>
-                  ))}
-                </ul>
-              )}
+                        <span className="truncate">{c.summary}</span>
+                        {c.primary && <Badge tone="primary">primary</Badge>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </Card>
             </li>
           ))}
         </ul>

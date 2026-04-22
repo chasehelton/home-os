@@ -9,6 +9,12 @@ import {
   listRecipes,
   updateRecipeApi,
 } from '../lib/recipes';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Input, Textarea } from './ui/Input';
+import { Badge } from './ui/Badge';
+import { PageHeader } from './ui/PageHeader';
+import { EmptyState } from './ui/EmptyState';
 
 type View = { kind: 'list' } | { kind: 'detail'; id: string } | { kind: 'edit'; id: string };
 
@@ -74,36 +80,46 @@ export function Recipes() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-4">
-      <form
-        onSubmit={doImport}
-        className="flex flex-col gap-2 rounded-lg bg-slate-800 p-3 sm:flex-row"
-      >
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          placeholder="Paste a recipe URL…"
-          className="flex-1 rounded bg-slate-900 px-3 py-2 outline-none ring-1 ring-slate-700 focus:ring-blue-500"
-          disabled={importing}
-        />
-        <button
-          type="submit"
-          disabled={importing}
-          className="rounded bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500 disabled:opacity-50"
-        >
-          {importing ? 'Importing…' : 'Import'}
-        </button>
-      </form>
-      {error && <p className="rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">{error}</p>}
+    <section className="mx-auto flex w-full max-w-5xl flex-col gap-6 px-4 py-8 md:px-margin md:py-lg">
+      <PageHeader
+        title="Recipes"
+        description="A curated shelf — paste a URL and home-os tucks it away as a clean markdown note."
+      />
+
+      <Card variant="tonal" padding="sm" className="sm:p-4">
+        <form onSubmit={doImport} className="flex flex-col gap-2 sm:flex-row">
+          <Input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            placeholder="Paste a recipe URL…"
+            className="flex-1"
+            disabled={importing}
+          />
+          <Button type="submit" disabled={importing}>
+            {importing ? 'Importing…' : 'Import'}
+          </Button>
+        </form>
+      </Card>
+
+      {error && (
+        <div className="rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+          {error}
+        </div>
+      )}
+
       {summaries.length === 0 ? (
-        <p className="py-8 text-center text-slate-500">No recipes yet. Paste a URL above.</p>
+        <EmptyState
+          icon={<span aria-hidden>◉</span>}
+          title="No recipes yet"
+          description="Paste a URL above — home-os will strip out the life story and keep the cooking."
+        />
       ) : (
-        <ul className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {summaries.map((r) => (
             <li key={r.id}>
               <button
                 onClick={() => setView({ kind: 'detail', id: r.id })}
-                className="flex w-full flex-col overflow-hidden rounded-lg bg-slate-800 text-left transition hover:bg-slate-700"
+                className="group flex w-full flex-col overflow-hidden rounded-lg bg-surface-lowest text-left shadow-ambient transition-all duration-200 ease-soft hover:-translate-y-0.5 hover:shadow-ambient-lg"
               >
                 {r.imagePath ? (
                   <img
@@ -112,15 +128,17 @@ export function Recipes() {
                     className="aspect-video w-full object-cover"
                   />
                 ) : (
-                  <div className="aspect-video w-full bg-slate-700" />
+                  <div className="aspect-video w-full bg-surface-container" />
                 )}
-                <div className="flex flex-1 flex-col gap-1 p-3">
-                  <p className="font-medium">{r.title}</p>
-                  {r.siteName && <p className="text-xs text-slate-400">{r.siteName}</p>}
+                <div className="flex flex-1 flex-col gap-1.5 p-4">
+                  <p className="font-display text-headline-md text-on-surface">{r.title}</p>
+                  {r.siteName && (
+                    <p className="text-label-md text-on-surface-variant">{r.siteName}</p>
+                  )}
                   {r.importStatus === 'partial' && (
-                    <span className="mt-1 inline-block w-fit rounded bg-amber-900/50 px-2 py-0.5 text-xs text-amber-200">
+                    <Badge tone="secondary" className="mt-1 self-start">
                       Needs review
-                    </span>
+                    </Badge>
                   )}
                 </div>
               </button>
@@ -128,7 +146,7 @@ export function Recipes() {
           ))}
         </ul>
       )}
-    </div>
+    </section>
   );
 }
 
@@ -153,16 +171,18 @@ function RecipeDetail({
 
   if (error) {
     return (
-      <div className="mx-auto max-w-3xl p-4">
-        <button onClick={onBack} className="text-sm text-blue-400 hover:underline">
+      <div className="mx-auto max-w-3xl px-4 py-8 md:px-margin">
+        <Button variant="ghost" size="sm" onClick={onBack}>
           ← Back
-        </button>
-        <p className="mt-4 rounded bg-red-900/40 px-3 py-2 text-red-200">{error}</p>
+        </Button>
+        <div className="mt-4 rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+          {error}
+        </div>
       </div>
     );
   }
   if (!recipe) {
-    return <div className="mx-auto max-w-3xl p-4 text-slate-400">Loading…</div>;
+    return <div className="mx-auto max-w-3xl p-8 text-body-md text-on-surface-variant">Loading…</div>;
   }
 
   if (stepMode) {
@@ -172,36 +192,30 @@ function RecipeDetail({
   const html = marked.parse(recipe.markdown, { async: false }) as string;
 
   return (
-    <div className="mx-auto max-w-3xl p-4">
+    <article className="mx-auto max-w-3xl px-4 py-8 md:px-margin md:py-lg">
       <div className="flex items-center justify-between">
-        <button onClick={onBack} className="text-sm text-blue-400 hover:underline">
+        <Button variant="ghost" size="sm" onClick={onBack}>
           ← Back to recipes
-        </button>
+        </Button>
         <div className="flex gap-2">
-          <button
-            onClick={() => setStepMode(true)}
-            className="rounded bg-blue-600 px-3 py-1 text-sm hover:bg-blue-500"
-          >
+          <Button size="sm" onClick={() => setStepMode(true)}>
             Step mode
-          </button>
-          <button
-            onClick={onEdit}
-            className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-          >
+          </Button>
+          <Button size="sm" variant="tonal" onClick={onEdit}>
             Edit
-          </button>
+          </Button>
         </div>
       </div>
       {recipe.imagePath && (
         <img
           src={`/api/recipes/${recipe.id}/image`}
           alt=""
-          className="mt-4 aspect-video w-full rounded-lg object-cover"
+          className="mt-6 aspect-video w-full rounded-xl object-cover shadow-ambient"
         />
       )}
-      <h1 className="mt-4 text-3xl font-semibold">{recipe.title}</h1>
+      <h1 className="mt-8 font-display text-display-lg text-on-surface">{recipe.title}</h1>
       {(recipe.author || recipe.siteName) && (
-        <p className="mt-1 text-sm text-slate-400">
+        <p className="mt-2 text-label-md text-on-surface-variant">
           {recipe.author && <span>{recipe.author}</span>}
           {recipe.author && recipe.siteName && <span> · </span>}
           {recipe.siteName && <span>{recipe.siteName}</span>}
@@ -212,7 +226,7 @@ function RecipeDetail({
                 href={recipe.sourceUrl}
                 target="_blank"
                 rel="noreferrer noopener"
-                className="text-blue-400 hover:underline"
+                className="text-primary underline underline-offset-2 hover:brightness-110"
               >
                 source
               </a>
@@ -220,23 +234,26 @@ function RecipeDetail({
           )}
         </p>
       )}
-      <article
-        className="prose prose-invert prose-slate mt-6 max-w-none"
+      <div
+        className="prose-home mt-8"
         // marked output is trusted-enough for a household-only app; we already
         // limit input sources (our own imports + our own edits).
         dangerouslySetInnerHTML={{ __html: html }}
       />
-      <button
-        onClick={async () => {
-          if (!confirm(`Delete "${recipe.title}"?`)) return;
-          await deleteRecipeApi(recipe.id);
-          onBack();
-        }}
-        className="mt-8 rounded bg-red-900/40 px-3 py-1 text-sm text-red-200 hover:bg-red-900/60"
-      >
-        Delete recipe
-      </button>
-    </div>
+      <div className="mt-12 border-t border-outline-variant/60 pt-6">
+        <Button
+          size="sm"
+          variant="danger"
+          onClick={async () => {
+            if (!confirm(`Delete "${recipe.title}"?`)) return;
+            await deleteRecipeApi(recipe.id);
+            onBack();
+          }}
+        >
+          Delete recipe
+        </Button>
+      </div>
+    </article>
   );
 }
 
@@ -264,32 +281,30 @@ function RecipeEditor({ id, onDone }: { id: string; onDone: () => void }) {
     }
   }
 
-  if (!recipe) return <div className="mx-auto max-w-3xl p-4 text-slate-400">Loading…</div>;
+  if (!recipe) {
+    return <div className="mx-auto max-w-3xl p-8 text-body-md text-on-surface-variant">Loading…</div>;
+  }
 
   return (
-    <div className="mx-auto flex max-w-3xl flex-col gap-3 p-4">
-      <button onClick={onDone} className="self-start text-sm text-blue-400 hover:underline">
+    <section className="mx-auto flex max-w-3xl flex-col gap-4 px-4 py-8 md:px-margin md:py-lg">
+      <Button variant="ghost" size="sm" onClick={onDone} className="self-start">
         ← Cancel
-      </button>
-      <input
+      </Button>
+      <Input
         value={title}
         onChange={(e) => setTitle(e.target.value)}
-        className="rounded bg-slate-900 px-3 py-2 text-lg outline-none ring-1 ring-slate-700 focus:ring-blue-500"
+        className="text-body-lg"
       />
-      <textarea
+      <Textarea
         value={markdown}
         onChange={(e) => setMarkdown(e.target.value)}
         rows={24}
-        className="rounded bg-slate-900 px-3 py-2 font-mono text-sm outline-none ring-1 ring-slate-700 focus:ring-blue-500"
+        className="font-mono text-body-md"
       />
-      <button
-        onClick={save}
-        disabled={saving}
-        className="self-end rounded bg-blue-600 px-4 py-2 font-medium hover:bg-blue-500 disabled:opacity-50"
-      >
+      <Button onClick={save} disabled={saving} className="self-end">
         {saving ? 'Saving…' : 'Save'}
-      </button>
-    </div>
+      </Button>
+    </section>
   );
 }
 
@@ -300,34 +315,37 @@ function StepMode({ recipe, onExit }: { recipe: Recipe; onExit: () => void }) {
   const html = marked.parse(current, { async: false }) as string;
 
   return (
-    <div className="flex min-h-[70vh] flex-col items-center justify-between gap-6 p-6 text-center">
-      <div className="flex w-full max-w-5xl items-center justify-between text-sm text-slate-400">
-        <button onClick={onExit} className="hover:text-slate-200">
+    <div className="flex min-h-[70vh] flex-col items-center justify-between gap-6 bg-surface px-6 py-lg text-center">
+      <div className="flex w-full max-w-5xl items-center justify-between text-label-md text-on-surface-variant">
+        <Button variant="ghost" size="sm" onClick={onExit}>
           ← Exit step mode
-        </button>
-        <span>
+        </Button>
+        <Badge tone="primary">
           {idx + 1} / {steps.length}
-        </span>
+        </Badge>
       </div>
-      <article
-        className="prose prose-invert prose-xl max-w-3xl text-left"
+      <div
+        className="prose-home max-w-3xl text-left"
         dangerouslySetInnerHTML={{ __html: html }}
       />
       <div className="flex gap-6">
-        <button
+        <Button
+          size="lg"
+          variant="tonal"
           onClick={() => setIdx((i) => Math.max(0, i - 1))}
           disabled={idx === 0}
-          className="rounded-full bg-slate-700 px-8 py-4 text-xl hover:bg-slate-600 disabled:opacity-30"
+          className="rounded-full px-10 py-4 text-body-lg"
         >
           Back
-        </button>
-        <button
+        </Button>
+        <Button
+          size="lg"
           onClick={() => setIdx((i) => Math.min(steps.length - 1, i + 1))}
           disabled={idx >= steps.length - 1}
-          className="rounded-full bg-blue-600 px-10 py-4 text-xl font-medium hover:bg-blue-500 disabled:opacity-30"
+          className="rounded-full px-12 py-4 text-body-lg"
         >
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );
@@ -341,7 +359,6 @@ function StepMode({ recipe, onExit }: { recipe: Recipe; onExit: () => void }) {
  */
 function splitSteps(md: string): string[] {
   if (!md.trim()) return [''];
-  // split out ordered-list items as their own steps
   const withNumbers = md.replace(/\n(\d+\.\s)/g, '\n---STEP---\n$1');
   const byHeading = withNumbers.split(/\n(?=#{2,3}\s)/g);
   const chunks: string[] = [];

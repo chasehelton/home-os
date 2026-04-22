@@ -7,6 +7,9 @@ import { Calendar } from './components/Calendar';
 import { Assistant } from './components/Assistant';
 import { Reminders } from './components/Reminders';
 import { ReminderBanner } from './components/ReminderBanner';
+import { AppShell, type NavItem } from './components/AppShell';
+import { ButtonLink } from './components/ui/Button';
+import { useTheme } from './lib/theme';
 
 interface Me {
   id: string;
@@ -17,7 +20,20 @@ interface Me {
 
 type Tab = 'todos' | 'recipes' | 'meals' | 'calendar' | 'reminders' | 'assistant' | 'settings';
 
+const NAV: NavItem<Tab>[] = [
+  { id: 'todos', label: 'Todos', icon: <span aria-hidden>✓</span> },
+  { id: 'recipes', label: 'Recipes', icon: <span aria-hidden>◉</span> },
+  { id: 'meals', label: 'Meals', icon: <span aria-hidden>☰</span> },
+  { id: 'calendar', label: 'Calendar', icon: <span aria-hidden>▦</span> },
+  { id: 'reminders', label: 'Reminders', icon: <span aria-hidden>❖</span> },
+  { id: 'assistant', label: 'Assistant', icon: <span aria-hidden>✦</span> },
+  { id: 'settings', label: 'Settings', icon: <span aria-hidden>⚙</span> },
+];
+
 export function App() {
+  // Wire up theme (reads localStorage, syncs html.dark, listens to system changes).
+  useTheme();
+
   const [me, setMe] = useState<Me | null>(null);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>(() => {
@@ -29,7 +45,7 @@ export function App() {
       t === 'reminders' ||
       t === 'assistant' ||
       t === 'settings'
-      ? t
+      ? (t as Tab)
       : 'todos';
   });
 
@@ -60,87 +76,57 @@ export function App() {
 
   if (loading) {
     return (
-      <main className="flex min-h-full items-center justify-center text-slate-400">Loading…</main>
+      <main className="flex min-h-full items-center justify-center bg-surface text-on-surface-variant">
+        <span className="text-body-lg">Loading…</span>
+      </main>
     );
   }
 
   if (!me) {
     return (
-      <main className="flex min-h-full flex-col items-center justify-center gap-6 p-8 text-center">
-        <h1 className="text-4xl font-semibold">home-os</h1>
-        <a
-          href="/auth/google/login"
-          className="rounded bg-blue-600 px-5 py-2 text-base font-medium hover:bg-blue-500"
-        >
-          Sign in with Google
-        </a>
+      <main className="grid min-h-full place-items-center bg-surface px-6 py-16 text-on-surface">
+        <div className="flex w-full max-w-lg flex-col items-center gap-6 text-center">
+          <p className="text-label-sm text-on-surface-variant">A calmer home, together.</p>
+          <h1 className="font-display text-display-lg text-on-surface">home-os</h1>
+          <p className="max-w-md text-body-lg text-on-surface-variant">
+            Your family&rsquo;s quiet workshop for todos, recipes, meal plans, and the rhythms that
+            hold the house together.
+          </p>
+          <ButtonLink href="/auth/google/login" size="lg" className="mt-4">
+            Sign in with Google
+          </ButtonLink>
+        </div>
       </main>
     );
   }
 
+  const body =
+    tab === 'todos' ? (
+      <TodoList currentUserId={me.id} />
+    ) : tab === 'recipes' ? (
+      <Recipes />
+    ) : tab === 'meals' ? (
+      <MealPlan />
+    ) : tab === 'calendar' ? (
+      <Calendar currentUserId={me.id} />
+    ) : tab === 'reminders' ? (
+      <Reminders />
+    ) : tab === 'assistant' ? (
+      <Assistant />
+    ) : (
+      <Settings />
+    );
+
   return (
-    <main className="flex min-h-full flex-col">
-      <header className="flex items-center justify-between border-b border-slate-800 px-4 py-3">
-        <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold">home-os</h1>
-          <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-            {(
-              [
-                'todos',
-                'recipes',
-                'meals',
-                'calendar',
-                'reminders',
-                'assistant',
-                'settings',
-              ] as Tab[]
-            ).map((t) => (
-              <button
-                key={t}
-                onClick={() => setTab(t)}
-                className={`rounded px-3 py-1 capitalize ${
-                  tab === t ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
-                }`}
-              >
-                {t}
-              </button>
-            ))}
-          </nav>
-        </div>
-        <div className="flex items-center gap-3 text-sm">
-          {me.pictureUrl && (
-            <img
-              src={me.pictureUrl}
-              alt=""
-              className="h-8 w-8 rounded-full"
-              referrerPolicy="no-referrer"
-            />
-          )}
-          <span className="hidden text-slate-300 sm:inline">{me.displayName}</span>
-          <button
-            onClick={logout}
-            className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
-          >
-            Sign out
-          </button>
-        </div>
-      </header>
-      <ReminderBanner />
-      {tab === 'todos' ? (
-        <TodoList currentUserId={me.id} />
-      ) : tab === 'recipes' ? (
-        <Recipes />
-      ) : tab === 'meals' ? (
-        <MealPlan />
-      ) : tab === 'calendar' ? (
-        <Calendar currentUserId={me.id} />
-      ) : tab === 'reminders' ? (
-        <Reminders />
-      ) : tab === 'assistant' ? (
-        <Assistant />
-      ) : (
-        <Settings />
-      )}
-    </main>
+    <AppShell<Tab>
+      items={NAV}
+      current={tab}
+      onSelect={setTab}
+      user={{ displayName: me.displayName, pictureUrl: me.pictureUrl }}
+      onSignOut={() => void logout()}
+      banner={<ReminderBanner />}
+    >
+      {body}
+    </AppShell>
   );
 }

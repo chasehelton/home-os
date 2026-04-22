@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Field as UiField, Input, Select, Textarea } from './ui/Input';
+import { Badge } from './ui/Badge';
+import { PageHeader } from './ui/PageHeader';
 
 // ---------------------------------------------------------------------------
 // Phase 9 — AI assistant tab.
@@ -117,7 +122,7 @@ export function Assistant() {
     try {
       setGh(await jsonFetch<GithubStatus>('/api/github/status'));
     } catch {
-      /* non-fatal — GitHub routes are optional UX */
+      /* non-fatal */
     }
   }
 
@@ -146,9 +151,7 @@ export function Assistant() {
         body: '{}',
       });
       setDevice(start);
-      // Open GitHub's verification page in a new tab for the user.
       window.open(start.verificationUri, '_blank', 'noopener,noreferrer');
-      // Start polling.
       await pollUntilDone(start.interval);
     } catch (e) {
       setGhError((e as Error).message);
@@ -270,157 +273,145 @@ export function Assistant() {
   const disabled = useMemo(() => status && (!status.enabled || needsGithub), [status, needsGithub]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4 text-slate-100">
-      <div className="mb-4 flex items-baseline justify-between">
-        <div>
-          <h2 className="text-xl font-semibold">Assistant</h2>
-          <p className="text-sm text-slate-400">
-            Natural-language commands. Preview before anything changes.
-          </p>
-        </div>
-        <div className="text-xs text-slate-400">
-          provider: <span className="text-slate-200">{status?.provider ?? '…'}</span>
-        </div>
-      </div>
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 md:px-margin md:py-lg">
+      <PageHeader
+        title="Assistant"
+        description="Plain-English commands. Nothing happens until you confirm."
+        actions={
+          <Badge tone="neutral">
+            provider: <span className="ml-1 normal-case">{status?.provider ?? '…'}</span>
+          </Badge>
+        }
+      />
 
       {isCopilot && (
-        <div className="mb-4 rounded border border-slate-700 bg-slate-900 px-3 py-3 text-sm">
+        <Card variant="outline" padding="md">
           {gh?.connected ? (
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-body-md text-on-surface">
                 Connected to GitHub as{' '}
                 <span className="font-medium">{gh.account?.githubLogin ?? '…'}</span>
-                <span className="ml-2 text-xs text-slate-400">
+                <span className="ml-2 text-label-md text-on-surface-variant">
                   (via GitHub Copilot — your GitHub token authorizes Copilot access)
                 </span>
               </div>
-              <button
-                onClick={() => void onDisconnectGithub()}
-                className="rounded border border-slate-600 px-3 py-1 text-xs hover:bg-slate-800"
-              >
+              <Button size="sm" variant="outline" onClick={() => void onDisconnectGithub()}>
                 Disconnect
-              </button>
+              </Button>
             </div>
           ) : device ? (
-            <div className="space-y-2">
-              <p className="text-slate-200">
+            <div className="space-y-3">
+              <p className="text-body-md text-on-surface">
                 Visit{' '}
                 <a
                   href={device.verificationUri}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-blue-400 underline"
+                  className="text-primary underline underline-offset-2"
                 >
                   {device.verificationUri}
                 </a>{' '}
                 and enter this code:
               </p>
-              <div className="font-mono text-2xl tracking-widest text-amber-300">
-                {device.userCode}
+              <div className="font-mono text-[2rem] tracking-widest text-secondary-on-container">
+                <span className="rounded-md bg-secondary-container px-3 py-1">
+                  {device.userCode}
+                </span>
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-label-md text-on-surface-variant">
                 Waiting for you to authorize… This page will update automatically.
               </p>
             </div>
           ) : (
-            <div className="flex items-center justify-between gap-3">
-              <div className="text-slate-200">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-body-md text-on-surface">
                 Connect your GitHub account to enable the assistant. The assistant uses GitHub
                 Copilot via the official SDK — no separate API key needed.
               </div>
-              <button
-                onClick={() => void onConnectGithub()}
-                disabled={connecting}
-                className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
-              >
+              <Button onClick={() => void onConnectGithub()} disabled={connecting}>
                 {connecting ? 'Starting…' : 'Connect GitHub'}
-              </button>
+              </Button>
             </div>
           )}
           {ghError && (
-            <div className="mt-2 rounded bg-red-950 px-2 py-1 text-xs text-red-300">{ghError}</div>
+            <div className="mt-3 rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+              {ghError}
+            </div>
           )}
-        </div>
+        </Card>
       )}
 
       {status && !status.enabled && !isCopilot && (
-        <div className="mb-4 rounded border border-amber-700 bg-amber-950 px-3 py-2 text-sm text-amber-200">
-          AI is disabled on this server. Set <code>HOME_OS_AI_PROVIDER</code> (and a key for OpenAI)
-          to enable it.
+        <div className="rounded-md bg-secondary-container px-3 py-2 text-body-md text-secondary-on-container">
+          AI is disabled on this server. Set <code className="font-mono">HOME_OS_AI_PROVIDER</code>{' '}
+          (and a key for OpenAI) to enable it.
         </div>
       )}
 
-      <div className="mb-4 flex flex-col gap-2">
-        <textarea
-          value={prompt}
-          onChange={(e) => setPrompt(e.target.value)}
-          rows={3}
-          placeholder={
-            needsGithub
-              ? 'Connect GitHub above to enable the assistant.'
-              : disabled
-                ? 'AI is currently disabled.'
-                : 'e.g. "add milk to the shared todo list" or "import recipe https://example.com/cookie"'
-          }
-          disabled={!!disabled}
-          className="w-full resize-y rounded border border-slate-700 bg-slate-900 p-2 text-sm focus:border-blue-500 focus:outline-none disabled:opacity-60"
-        />
-        <div className="flex gap-2">
-          <button
-            onClick={() => void onParse()}
-            disabled={!!disabled || !prompt.trim() || parsing}
-            className="rounded bg-blue-600 px-4 py-1.5 text-sm font-medium hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {parsing ? 'Planning…' : 'Plan actions'}
-          </button>
-          {(proposals || outcomes) && (
-            <button
-              onClick={onReset}
-              className="rounded bg-slate-700 px-3 py-1.5 text-sm hover:bg-slate-600"
+      <Card variant="tonal" padding="sm" className="sm:p-4">
+        <div className="flex flex-col gap-3">
+          <Textarea
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            rows={3}
+            placeholder={
+              needsGithub
+                ? 'Connect GitHub above to enable the assistant.'
+                : disabled
+                  ? 'AI is currently disabled.'
+                  : 'e.g. "add milk to the shared todo list" or "import recipe https://example.com/cookie"'
+            }
+            disabled={!!disabled}
+          />
+          <div className="flex gap-2">
+            <Button
+              onClick={() => void onParse()}
+              disabled={!!disabled || !prompt.trim() || parsing}
             >
-              Reset
-            </button>
-          )}
+              {parsing ? 'Planning…' : 'Plan actions'}
+            </Button>
+            {(proposals || outcomes) && (
+              <Button variant="tonal" onClick={onReset}>
+                Reset
+              </Button>
+            )}
+          </div>
         </div>
-      </div>
+      </Card>
 
       {error && (
-        <div className="mb-4 rounded border border-red-800 bg-red-950 px-3 py-2 text-sm text-red-200">
+        <div className="rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
           {error}
         </div>
       )}
 
       {proposals && proposals.length > 0 && !outcomes && (
-        <div className="mb-4 flex flex-col gap-3">
-          <h3 className="text-sm font-medium text-slate-300">
+        <div className="flex flex-col gap-3">
+          <h3 className="font-display text-headline-md text-on-surface">
             Proposed actions ({proposals.length})
           </h3>
           {proposals.map((call, i) => (
             <ProposalCard key={i} call={call} onChange={(next) => updateProposal(i, () => next)} />
           ))}
           <div>
-            <button
-              onClick={() => void onExecute()}
-              disabled={executing}
-              className="rounded bg-emerald-600 px-4 py-1.5 text-sm font-medium hover:bg-emerald-500 disabled:opacity-50"
-            >
+            <Button variant="primary" onClick={() => void onExecute()} disabled={executing}>
               {executing ? 'Running…' : 'Confirm and run'}
-            </button>
+            </Button>
           </div>
         </div>
       )}
 
       {outcomes && (
-        <div className="mb-4 flex flex-col gap-2">
-          <h3 className="text-sm font-medium text-slate-300">Results</h3>
+        <div className="flex flex-col gap-2">
+          <h3 className="font-display text-headline-md text-on-surface">Results</h3>
           {outcomes.map((o, i) => (
             <div
               key={i}
-              className={`rounded border px-3 py-2 text-sm ${
+              className={
                 o.ok
-                  ? 'border-emerald-700 bg-emerald-950 text-emerald-100'
-                  : 'border-red-800 bg-red-950 text-red-100'
-              }`}
+                  ? 'rounded-md bg-tertiary-container px-3 py-2 text-body-md text-tertiary-on-container'
+                  : 'rounded-md bg-danger-container px-3 py-2 text-body-md text-danger-on-container'
+              }
             >
               {o.ok ? `✓ ${o.entityType} created (${o.entityId})` : `✗ ${o.error ?? 'failed'}`}
             </div>
@@ -429,20 +420,20 @@ export function Assistant() {
       )}
 
       <div className="mt-auto">
-        <h3 className="mb-2 text-sm font-medium text-slate-300">Recent</h3>
+        <h3 className="mb-3 font-display text-headline-md text-on-surface">Recent</h3>
         {transcripts.length === 0 ? (
-          <p className="text-xs text-slate-500">No interactions yet.</p>
+          <p className="text-label-md text-on-surface-variant">No interactions yet.</p>
         ) : (
-          <ul className="flex flex-col gap-1 text-xs text-slate-400">
+          <ul className="flex flex-col divide-y divide-outline-variant/60 rounded-lg bg-surface-container-low">
             {transcripts.map((t) => (
-              <li key={t.id} className="truncate">
-                <span className="text-slate-500">
+              <li key={t.id} className="px-4 py-3 text-label-md text-on-surface-variant">
+                <span className="text-on-surface-variant/80">
                   {new Date(t.createdAt).toLocaleTimeString()} ·{' '}
                 </span>
-                <span className="text-slate-200">{t.prompt}</span>
-                <span className="text-slate-500">
-                  {' '}
-                  → {t.toolCalls.map((c) => c.tool).join(', ') || '(no calls)'}
+                <span className="text-on-surface">{t.prompt}</span>
+                <span>
+                  {' → '}
+                  {t.toolCalls.map((c) => c.tool).join(', ') || '(no calls)'}
                   {t.outcomes
                     ? ` · ${t.outcomes.filter((o) => o.ok).length}/${t.outcomes.length} ok`
                     : ''}
@@ -458,10 +449,10 @@ export function Assistant() {
 
 function ProposalCard({ call, onChange }: { call: ToolCall; onChange: (next: ToolCall) => void }) {
   return (
-    <div className="rounded border border-slate-700 bg-slate-900 p-3">
-      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-blue-300">
+    <Card variant="elevated" padding="md">
+      <Badge tone="primary" className="mb-3">
         {call.tool.replace(/_/g, ' ')}
-      </div>
+      </Badge>
       {call.tool === 'create_todo' && (
         <TodoFields args={call.args} onChange={(args) => onChange({ tool: 'create_todo', args })} />
       )}
@@ -477,21 +468,9 @@ function ProposalCard({ call, onChange }: { call: ToolCall; onChange: (next: Too
           onChange={(args) => onChange({ tool: 'import_recipe', args })}
         />
       )}
-    </div>
+    </Card>
   );
 }
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="mb-2 block text-xs">
-      <span className="mb-0.5 block text-slate-400">{label}</span>
-      {children}
-    </label>
-  );
-}
-
-const inputCls =
-  'w-full rounded border border-slate-700 bg-slate-950 px-2 py-1 text-sm focus:border-blue-500 focus:outline-none';
 
 function TodoFields({
   args,
@@ -501,33 +480,27 @@ function TodoFields({
   onChange: (next: CreateTodoArgs) => void;
 }) {
   return (
-    <>
-      <Field label="Title">
-        <input
-          className={inputCls}
-          value={args.title}
-          onChange={(e) => onChange({ ...args, title: e.target.value })}
-        />
-      </Field>
-      <Field label="Scope">
-        <select
-          className={inputCls}
+    <div className="flex flex-col gap-3">
+      <UiField label="Title">
+        <Input value={args.title} onChange={(e) => onChange({ ...args, title: e.target.value })} />
+      </UiField>
+      <UiField label="Scope">
+        <Select
           value={args.scope}
           onChange={(e) => onChange({ ...args, scope: e.target.value as 'household' | 'user' })}
         >
           <option value="household">household</option>
           <option value="user">user</option>
-        </select>
-      </Field>
-      <Field label="Due (ISO, optional)">
-        <input
-          className={inputCls}
+        </Select>
+      </UiField>
+      <UiField label="Due (ISO, optional)">
+        <Input
           value={args.dueAt ?? ''}
           onChange={(e) => onChange({ ...args, dueAt: e.target.value || null })}
           placeholder="2026-05-01T18:00:00-04:00"
         />
-      </Field>
-    </>
+      </UiField>
+    </div>
   );
 }
 
@@ -539,36 +512,23 @@ function EventFields({
   onChange: (next: CreateEventArgs) => void;
 }) {
   return (
-    <>
-      <Field label="Title">
-        <input
-          className={inputCls}
-          value={args.title}
-          onChange={(e) => onChange({ ...args, title: e.target.value })}
-        />
-      </Field>
-      <Field label="Start (ISO)">
-        <input
-          className={inputCls}
-          value={args.startAt}
-          onChange={(e) => onChange({ ...args, startAt: e.target.value })}
-        />
-      </Field>
-      <Field label="End (ISO)">
-        <input
-          className={inputCls}
-          value={args.endAt}
-          onChange={(e) => onChange({ ...args, endAt: e.target.value })}
-        />
-      </Field>
-      <Field label="Location (optional)">
-        <input
-          className={inputCls}
+    <div className="flex flex-col gap-3">
+      <UiField label="Title">
+        <Input value={args.title} onChange={(e) => onChange({ ...args, title: e.target.value })} />
+      </UiField>
+      <UiField label="Start (ISO)">
+        <Input value={args.startAt} onChange={(e) => onChange({ ...args, startAt: e.target.value })} />
+      </UiField>
+      <UiField label="End (ISO)">
+        <Input value={args.endAt} onChange={(e) => onChange({ ...args, endAt: e.target.value })} />
+      </UiField>
+      <UiField label="Location (optional)">
+        <Input
           value={args.location ?? ''}
           onChange={(e) => onChange({ ...args, location: e.target.value || null })}
         />
-      </Field>
-    </>
+      </UiField>
+    </div>
   );
 }
 
@@ -580,12 +540,8 @@ function RecipeFields({
   onChange: (next: ImportRecipeArgs) => void;
 }) {
   return (
-    <Field label="URL">
-      <input
-        className={inputCls}
-        value={args.url}
-        onChange={(e) => onChange({ ...args, url: e.target.value })}
-      />
-    </Field>
+    <UiField label="URL">
+      <Input value={args.url} onChange={(e) => onChange({ ...args, url: e.target.value })} />
+    </UiField>
   );
 }

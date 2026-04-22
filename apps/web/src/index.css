@@ -2,8 +2,183 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================================
+   Luminous Domesticity — design tokens
+   Values are RGB triplets so Tailwind's <alpha-value> syntax works.
+   ========================================================================== */
+
+:root {
+  /* Surfaces */
+  --surface: 251 249 248;
+  --surface-dim: 219 217 217;
+  --surface-bright: 251 249 248;
+  --surface-container-lowest: 255 255 255;
+  --surface-container-low: 245 243 243;
+  --surface-container: 240 237 237;
+  --surface-container-high: 234 232 231;
+  --surface-container-highest: 228 226 226;
+  --surface-variant: 228 226 226;
+  --on-surface: 27 28 28;
+  --on-surface-variant: 88 65 60;
+  --inverse-surface: 48 48 48;
+  --inverse-on-surface: 242 240 240;
+
+  --outline: 140 113 107;
+  --outline-variant: 224 191 184;
+
+  /* Primary — muted sage */
+  --primary: 97 93 62;
+  --on-primary: 255 255 255;
+  --primary-container: 122 117 85;
+  --on-primary-container: 255 251 255;
+  --inverse-primary: 206 199 162;
+
+  /* Secondary — buttery amber */
+  --secondary: 128 86 4;
+  --on-secondary: 255 255 255;
+  --secondary-container: 255 197 110;
+  --on-secondary-container: 120 80 0;
+
+  /* Tertiary — cool sage-teal */
+  --tertiary: 72 96 95;
+  --on-tertiary: 255 255 255;
+  --tertiary-container: 96 121 120;
+  --on-tertiary-container: 243 255 253;
+
+  /* Error */
+  --error: 186 26 26;
+  --on-error: 255 255 255;
+  --error-container: 255 218 214;
+  --on-error-container: 147 0 10;
+
+  color-scheme: light;
+}
+
+.dark {
+  --surface: 17 19 19;
+  --surface-dim: 17 19 19;
+  --surface-bright: 52 54 54;
+  --surface-container-lowest: 11 13 13;
+  --surface-container-low: 26 28 28;
+  --surface-container: 30 32 32;
+  --surface-container-high: 41 43 43;
+  --surface-container-highest: 52 54 54;
+  --surface-variant: 73 70 69;
+  --on-surface: 228 226 226;
+  --on-surface-variant: 208 193 188;
+  --inverse-surface: 228 226 226;
+  --inverse-on-surface: 48 48 48;
+
+  --outline: 155 138 133;
+  --outline-variant: 73 70 69;
+
+  --primary: 206 199 162;
+  --on-primary: 51 48 21;
+  --primary-container: 75 71 43;
+  --on-primary-container: 234 227 188;
+  --inverse-primary: 97 93 62;
+
+  --secondary: 246 188 103;
+  --on-secondary: 65 42 0;
+  --secondary-container: 98 64 0;
+  --on-secondary-container: 255 221 177;
+
+  --tertiary: 177 204 202;
+  --on-tertiary: 28 53 52;
+  --tertiary-container: 51 75 74;
+  --on-tertiary-container: 205 232 230;
+
+  --error: 255 180 171;
+  --on-error: 105 0 5;
+  --error-container: 147 0 10;
+  --on-error-container: 255 218 214;
+
+  color-scheme: dark;
+}
+
 html,
 body,
 #root {
   height: 100%;
+}
+
+body {
+  font-family:
+    'Manrope',
+    system-ui,
+    -apple-system,
+    sans-serif;
+  background-color: rgb(var(--surface));
+  color: rgb(var(--on-surface));
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Consistent focus ring using token colors */
+*:focus-visible {
+  outline: 2px solid rgb(var(--primary));
+  outline-offset: 2px;
+  border-radius: 0.25rem;
+}
+
+/* Markdown rendering for recipe bodies and assistant output. */
+.prose-home {
+  color: rgb(var(--on-surface));
+  font-size: 18px;
+  line-height: 1.7;
+}
+.prose-home h1,
+.prose-home h2,
+.prose-home h3,
+.prose-home h4 {
+  font-family: 'Newsreader', Georgia, serif;
+  color: rgb(var(--on-surface));
+  font-weight: 500;
+  line-height: 1.25;
+  margin-top: 1.5em;
+  margin-bottom: 0.5em;
+}
+.prose-home h1 { font-size: 2rem; }
+.prose-home h2 { font-size: 1.5rem; }
+.prose-home h3 { font-size: 1.25rem; }
+.prose-home p { margin: 0.9em 0; }
+.prose-home ul,
+.prose-home ol { margin: 0.9em 0; padding-left: 1.5em; }
+.prose-home ul { list-style: disc; }
+.prose-home ol { list-style: decimal; }
+.prose-home li { margin: 0.25em 0; }
+.prose-home a {
+  color: rgb(var(--primary));
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.prose-home code {
+  background: rgb(var(--surface-container));
+  color: rgb(var(--on-surface));
+  padding: 0.1em 0.35em;
+  border-radius: 0.25rem;
+  font-size: 0.9em;
+}
+.prose-home pre {
+  background: rgb(var(--surface-container));
+  padding: 1rem;
+  border-radius: 0.75rem;
+  overflow-x: auto;
+}
+.prose-home blockquote {
+  border-left: 3px solid rgb(var(--outline-variant));
+  padding-left: 1rem;
+  color: rgb(var(--on-surface-variant));
+  font-style: italic;
+}
+.prose-home hr {
+  border: 0;
+  border-top: 1px solid rgb(var(--outline-variant));
+  margin: 2em 0;
+}
+
+/* Slightly warmer selection */
+::selection {
+  background: rgb(var(--secondary-container));
+  color: rgb(var(--on-secondary-container));
 }

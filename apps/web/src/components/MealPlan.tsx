@@ -12,6 +12,12 @@ import {
   weekStartSunday,
 } from '../lib/mealplan';
 import { listRecipes, type RecipeSummary } from '../lib/recipes';
+import { Button } from './ui/Button';
+import { Field, Input, Select, Textarea } from './ui/Input';
+import { Dialog } from './ui/Dialog';
+import { Badge } from './ui/Badge';
+import { PageHeader } from './ui/PageHeader';
+import { cn } from './ui/cn';
 
 const SLOTS: MealSlot[] = ['breakfast', 'lunch', 'dinner', 'snack'];
 const DAY_LABELS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -111,55 +117,63 @@ export function MealPlan() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={() => setWeekStart(addDays(weekStart, -7))}
-            className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-          >
-            ← Prev
-          </button>
-          <button
-            onClick={() => setWeekStart(weekStartSunday(new Date()))}
-            className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-          >
-            This week
-          </button>
-          <button
-            onClick={() => setWeekStart(addDays(weekStart, 7))}
-            className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-          >
-            Next →
-          </button>
-          <span className="ml-2 text-sm text-slate-400">
-            Week of {weekStart.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-          </span>
-        </div>
-        {tonight && (
-          <div className="rounded bg-blue-900/40 px-3 py-1 text-sm text-blue-100">
-            Tonight: <strong>{displayLabel(tonight, recipes)}</strong>
+    <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-4 py-8 md:px-margin md:py-lg">
+      <PageHeader
+        title="Meal plan"
+        description={`Week of ${weekStart.toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}.`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" variant="outline" onClick={() => setWeekStart(addDays(weekStart, -7))}>
+              ← Prev
+            </Button>
+            <Button size="sm" variant="tonal" onClick={() => setWeekStart(weekStartSunday(new Date()))}>
+              This week
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setWeekStart(addDays(weekStart, 7))}>
+              Next →
+            </Button>
           </div>
-        )}
-      </div>
-      {error && <p className="rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">{error}</p>}
+        }
+      />
+
+      {tonight && (
+        <div className="flex items-center gap-2 rounded-lg bg-tertiary-container px-4 py-3 text-body-md text-tertiary-on-container">
+          <span aria-hidden>🍽</span>
+          Tonight: <strong className="font-semibold">{displayLabel(tonight, recipes)}</strong>
+        </div>
+      )}
+
+      {error && (
+        <div className="rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+          {error}
+        </div>
+      )}
 
       <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] border-separate border-spacing-1">
+        <table className="w-full min-w-[720px] border-separate border-spacing-1.5">
           <thead>
             <tr>
-              <th className="w-20 text-left text-xs font-medium text-slate-400"></th>
+              <th className="w-20 text-left text-label-sm text-on-surface-variant"></th>
               {days.map((d, i) => {
                 const isToday = toYmd(d) === todayYmd;
                 return (
-                  <th
-                    key={i}
-                    className={`px-2 pb-2 text-left text-xs font-medium ${
-                      isToday ? 'text-blue-300' : 'text-slate-400'
-                    }`}
-                  >
-                    <div>{DAY_LABELS[d.getDay()]}</div>
-                    <div className="text-sm text-slate-200">{d.getDate()}</div>
+                  <th key={i} className="px-2 pb-2 text-left">
+                    <div
+                      className={cn(
+                        'text-label-sm',
+                        isToday ? 'text-primary' : 'text-on-surface-variant',
+                      )}
+                    >
+                      {DAY_LABELS[d.getDay()]}
+                    </div>
+                    <div
+                      className={cn(
+                        'font-display text-headline-md',
+                        isToday ? 'text-primary' : 'text-on-surface',
+                      )}
+                    >
+                      {d.getDate()}
+                    </div>
                   </th>
                 );
               })}
@@ -168,25 +182,27 @@ export function MealPlan() {
           <tbody>
             {SLOTS.map((slot) => (
               <tr key={slot}>
-                <td className="pr-2 align-top text-xs capitalize text-slate-400">{slot}</td>
+                <td className="pr-2 align-top text-label-md capitalize text-on-surface-variant">
+                  {slot}
+                </td>
                 {days.map((d, i) => {
                   const ymd = toYmd(d);
                   const cell = byCell.get(`${ymd}|${slot}`) ?? [];
                   return (
                     <td key={i} className="align-top">
-                      <div className="flex min-h-[72px] flex-col gap-1 rounded bg-slate-800 p-2">
+                      <div className="flex min-h-[84px] flex-col gap-1 rounded-md bg-surface-container-low p-2">
                         {cell.map((e) => (
                           <button
                             key={e.id}
                             onClick={() => setModal({ kind: 'edit', entry: e })}
-                            className="rounded bg-slate-700 px-2 py-1 text-left text-sm hover:bg-slate-600"
+                            className="rounded-sm bg-surface-lowest px-2 py-1.5 text-left text-body-md text-on-surface shadow-ambient transition-all duration-200 ease-soft hover:-translate-y-px"
                           >
                             {displayLabel(e, recipes)}
                           </button>
                         ))}
                         <button
                           onClick={() => setModal({ kind: 'add', date: ymd, slot })}
-                          className="mt-auto rounded border border-dashed border-slate-600 px-2 py-1 text-center text-xs text-slate-400 hover:border-slate-400 hover:text-slate-200"
+                          className="mt-auto rounded-sm border border-dashed border-outline-variant px-2 py-1 text-center text-label-md text-on-surface-variant transition-colors duration-200 ease-soft hover:border-primary hover:text-primary"
                         >
                           + add
                         </button>
@@ -214,7 +230,7 @@ export function MealPlan() {
           onDelete={modal.kind === 'edit' ? () => handleDelete(modal.entry.id) : undefined}
         />
       )}
-    </div>
+    </section>
   );
 }
 
@@ -289,104 +305,76 @@ function EntryModal({
   }
 
   return (
-    <div className="fixed inset-0 z-10 flex items-center justify-center bg-black/60 p-4">
-      <form
-        onSubmit={submit}
-        className="flex w-full max-w-md flex-col gap-3 rounded-lg bg-slate-900 p-5 shadow-xl ring-1 ring-slate-700"
-      >
-        <h2 className="text-lg font-semibold">{initial.id ? 'Edit meal' : 'Plan a meal'}</h2>
-        <div className="text-xs text-slate-400">
+    <Dialog
+      open
+      onClose={onCancel}
+      title={initial.id ? 'Edit meal' : 'Plan a meal'}
+      description={
+        <span>
           {labelForDate} · <span className="capitalize">{slot}</span>
+        </span>
+      }
+      footer={
+        <div className="flex w-full items-center justify-between gap-2">
+          {onDelete ? (
+            <Button type="button" size="sm" variant="danger" onClick={onDelete}>
+              Delete
+            </Button>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button type="button" variant="tonal" onClick={onCancel}>
+              Cancel
+            </Button>
+            <Button form="mealplan-form" type="submit">
+              Save
+            </Button>
+          </div>
         </div>
-
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-400">Date</span>
-          <input
-            type="date"
-            value={date}
-            onChange={(e) => setDate(e.target.value)}
-            className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-700 focus:ring-blue-500"
-          />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-400">Slot</span>
-          <select
-            value={slot}
-            onChange={(e) => setSlot(e.target.value as MealSlot)}
-            className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-700 focus:ring-blue-500"
-          >
-            {SLOTS.map((s) => (
-              <option key={s} value={s} className="capitalize">
-                {s}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-400">Recipe</span>
-          <select
-            value={recipeId}
-            onChange={(e) => setRecipeId(e.target.value)}
-            className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-700 focus:ring-blue-500"
-          >
+      }
+    >
+      <form id="mealplan-form" onSubmit={submit} className="flex flex-col gap-4">
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Date">
+            <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+          </Field>
+          <Field label="Slot">
+            <Select value={slot} onChange={(e) => setSlot(e.target.value as MealSlot)}>
+              {SLOTS.map((s) => (
+                <option key={s} value={s} className="capitalize">
+                  {s}
+                </option>
+              ))}
+            </Select>
+          </Field>
+        </div>
+        <Field label="Recipe">
+          <Select value={recipeId} onChange={(e) => setRecipeId(e.target.value)}>
             <option value="">— none (use title) —</option>
             {recipes.map((r) => (
               <option key={r.id} value={r.id}>
                 {r.title}
               </option>
             ))}
-          </select>
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-400">Title (optional override)</span>
-          <input
+          </Select>
+        </Field>
+        <Field label="Title (optional override)">
+          <Input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
             placeholder={recipeId ? '(using recipe title)' : 'e.g. Leftovers, Takeout'}
-            className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-700 focus:ring-blue-500"
           />
-        </label>
-        <label className="flex flex-col gap-1 text-sm">
-          <span className="text-slate-400">Notes</span>
-          <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            rows={2}
-            className="rounded bg-slate-800 px-2 py-1 ring-1 ring-slate-700 focus:ring-blue-500"
-          />
-        </label>
-
-        {err && <p className="rounded bg-red-900/40 px-3 py-2 text-sm text-red-200">{err}</p>}
-
-        <div className="mt-2 flex items-center justify-between gap-2">
-          {onDelete ? (
-            <button
-              type="button"
-              onClick={onDelete}
-              className="rounded bg-red-900/40 px-3 py-1 text-sm text-red-200 hover:bg-red-900/60"
-            >
-              Delete
-            </button>
-          ) : (
-            <span />
-          )}
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={onCancel}
-              className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-            >
-              Cancel
-            </button>
-            <button
-              type="submit"
-              className="rounded bg-blue-600 px-4 py-1 text-sm font-medium hover:bg-blue-500"
-            >
-              Save
-            </button>
-          </div>
-        </div>
+        </Field>
+        <Field label="Notes">
+          <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={2} />
+        </Field>
+        {err && (
+          <Badge tone="danger" className="self-start normal-case">
+            {err}
+          </Badge>
+        )}
       </form>
-    </div>
+    </Dialog>
   );
 }

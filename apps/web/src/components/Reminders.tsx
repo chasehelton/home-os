@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
 import type { Reminder } from '@home-os/shared';
+import { Button } from './ui/Button';
+import { Card } from './ui/Card';
+import { Field, Input, Select, Textarea } from './ui/Input';
+import { Badge } from './ui/Badge';
+import { PageHeader } from './ui/PageHeader';
+import { EmptyState } from './ui/EmptyState';
 
 type Scope = 'household' | 'user';
 
@@ -21,8 +27,8 @@ export function Reminders() {
       if (includeDismissed) q.set('includeDismissed', 'true');
       const res = await fetch(`/api/reminders?${q.toString()}`, { credentials: 'include' });
       if (!res.ok) throw new Error(`list failed (${res.status})`);
-      const body = (await res.json()) as { reminders: Reminder[] };
-      setRows(body.reminders);
+      const payload = (await res.json()) as { reminders: Reminder[] };
+      setRows(payload.reminders);
       setError(null);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'failed to load');
@@ -33,8 +39,6 @@ export function Reminders() {
 
   useEffect(() => {
     void load();
-    // load() uses includeDismissed from the closure; the ESLint React hooks
-    // plugin isn't installed in this repo, but we keep the effect minimal.
   }, [includeDismissed]);
 
   async function create(e: React.FormEvent) {
@@ -77,120 +81,106 @@ export function Reminders() {
   }
 
   return (
-    <section className="mx-auto flex max-w-3xl flex-col gap-6 p-6">
-      <header className="flex items-baseline justify-between">
-        <h2 className="text-2xl font-semibold">Reminders</h2>
-        <label className="flex items-center gap-2 text-sm text-slate-400">
-          <input
-            type="checkbox"
-            checked={includeDismissed}
-            onChange={(e) => setIncludeDismissed(e.target.checked)}
-          />
-          Show dismissed
-        </label>
-      </header>
-
-      <form
-        onSubmit={(e) => void create(e)}
-        className="flex flex-col gap-3 rounded border border-slate-800 bg-slate-900/40 p-4"
-      >
-        <input
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-          placeholder="Remind me to…"
-          className="rounded bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-          required
-        />
-        <textarea
-          value={body}
-          onChange={(e) => setBody(e.target.value)}
-          placeholder="Optional details"
-          rows={2}
-          className="rounded bg-slate-800 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-600"
-        />
-        <div className="flex flex-wrap gap-3">
-          <label className="flex flex-col text-xs text-slate-400">
-            When
+    <section className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 md:px-margin md:py-lg">
+      <PageHeader
+        title="Reminders"
+        description="Small nudges for the household and for yourself — appearing as a banner when they fire."
+        actions={
+          <label className="flex items-center gap-2 text-label-md text-on-surface-variant">
             <input
-              type="datetime-local"
-              value={fireAt}
-              onChange={(e) => setFireAt(e.target.value)}
-              className="mt-1 rounded bg-slate-800 px-3 py-2 text-sm"
+              type="checkbox"
+              checked={includeDismissed}
+              onChange={(e) => setIncludeDismissed(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            Show dismissed
+          </label>
+        }
+      />
+
+      <Card variant="tonal" padding="md">
+        <form onSubmit={(e) => void create(e)} className="flex flex-col gap-4">
+          <Field label="Title" required>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Remind me to…"
               required
             />
-          </label>
-          <label className="flex flex-col text-xs text-slate-400">
-            Scope
-            <select
-              value={scope}
-              onChange={(e) => setScope(e.target.value as Scope)}
-              className="mt-1 rounded bg-slate-800 px-3 py-2 text-sm"
-            >
-              <option value="user">Just me</option>
-              <option value="household">Household</option>
-            </select>
-          </label>
-          <button
-            type="submit"
-            disabled={busy}
-            className="self-end rounded bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500 disabled:opacity-50"
-          >
-            {busy ? 'Saving…' : 'Schedule reminder'}
-          </button>
-        </div>
-      </form>
+          </Field>
+          <Field label="Details">
+            <Textarea
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              placeholder="Optional notes"
+              rows={2}
+            />
+          </Field>
+          <div className="grid gap-3 sm:grid-cols-[1fr_1fr_auto] sm:items-end">
+            <Field label="When" required>
+              <Input
+                type="datetime-local"
+                value={fireAt}
+                onChange={(e) => setFireAt(e.target.value)}
+                required
+              />
+            </Field>
+            <Field label="Scope">
+              <Select value={scope} onChange={(e) => setScope(e.target.value as Scope)}>
+                <option value="user">Just me</option>
+                <option value="household">Household</option>
+              </Select>
+            </Field>
+            <Button type="submit" disabled={busy}>
+              {busy ? 'Saving…' : 'Schedule reminder'}
+            </Button>
+          </div>
+        </form>
+      </Card>
 
-      {error && <div className="rounded bg-red-900/40 p-3 text-sm text-red-200">{error}</div>}
+      {error && (
+        <div className="rounded-md bg-danger-container px-3 py-2 text-label-md text-danger-on-container">
+          {error}
+        </div>
+      )}
 
       {loading ? (
-        <div className="text-slate-400">Loading…</div>
+        <div className="text-body-md text-on-surface-variant">Loading…</div>
       ) : rows.length === 0 ? (
-        <div className="text-slate-400">No reminders scheduled.</div>
+        <EmptyState
+          icon={<span aria-hidden>❖</span>}
+          title="No reminders scheduled"
+          description="Use the form above to set a gentle nudge — a pickup, a prescription refill, a birthday call."
+        />
       ) : (
         <ul className="flex flex-col gap-2">
           {rows.map((r) => (
-            <li
-              key={r.id}
-              className="flex items-center justify-between gap-3 rounded border border-slate-800 bg-slate-900/40 p-3"
-            >
-              <div>
-                <div className="flex items-center gap-2 text-sm">
-                  <span className="font-medium">{r.title}</span>
-                  <span
-                    className={`rounded px-1.5 text-xs ${
-                      r.scope === 'household'
-                        ? 'bg-indigo-900 text-indigo-200'
-                        : 'bg-slate-800 text-slate-300'
-                    }`}
-                  >
-                    {r.scope}
-                  </span>
-                  <span
-                    className={`rounded px-1.5 text-xs ${statusColor(r.status)}`}
-                    title={r.firedAt ?? undefined}
-                  >
-                    {r.status}
-                  </span>
+            <li key={r.id}>
+              <Card variant="outline" padding="none" className="flex items-center justify-between gap-3 px-4 py-3">
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="text-body-md font-medium text-on-surface">{r.title}</span>
+                    <Badge tone={r.scope === 'household' ? 'tertiary' : 'neutral'}>{r.scope}</Badge>
+                    <Badge tone={statusTone(r.status)} title={r.firedAt ?? undefined}>
+                      {r.status}
+                    </Badge>
+                  </div>
+                  <div className="mt-0.5 text-label-md text-on-surface-variant">
+                    {formatLocal(r.fireAt)}
+                  </div>
+                  {r.body && <div className="mt-1 text-body-md text-on-surface">{r.body}</div>}
                 </div>
-                <div className="text-xs text-slate-400">{formatLocal(r.fireAt)}</div>
-                {r.body && <div className="mt-1 text-sm text-slate-300">{r.body}</div>}
-              </div>
-              <div className="flex gap-2">
-                {r.status === 'fired' && (
-                  <button
-                    onClick={() => void dismiss(r.id)}
-                    className="rounded bg-slate-700 px-3 py-1 text-xs hover:bg-slate-600"
-                  >
-                    Dismiss
-                  </button>
-                )}
-                <button
-                  onClick={() => void del(r.id)}
-                  className="rounded bg-red-800 px-3 py-1 text-xs hover:bg-red-700"
-                >
-                  Delete
-                </button>
-              </div>
+                <div className="flex shrink-0 gap-2">
+                  {r.status === 'fired' && (
+                    <Button size="sm" variant="tonal" onClick={() => void dismiss(r.id)}>
+                      Dismiss
+                    </Button>
+                  )}
+                  <Button size="sm" variant="danger" onClick={() => void del(r.id)}>
+                    Delete
+                  </Button>
+                </div>
+              </Card>
             </li>
           ))}
         </ul>
@@ -211,9 +201,6 @@ function toLocalInputValue(d: Date): string {
 }
 
 function localInputToIso(v: string): string {
-  // Interpret the datetime-local value in the browser's local zone and
-  // serialize as ISO-8601 with explicit offset so the server receives
-  // an offset-aware timestamp.
   const d = new Date(v);
   const tzOffsetMin = -d.getTimezoneOffset();
   const sign = tzOffsetMin >= 0 ? '+' : '-';
@@ -233,9 +220,8 @@ function formatLocal(iso: string): string {
   }
 }
 
-function statusColor(status: string): string {
-  if (status === 'fired') return 'bg-amber-900 text-amber-200';
-  if (status === 'dismissed') return 'bg-slate-800 text-slate-400';
-  if (status === 'cancelled') return 'bg-slate-800 text-slate-500';
-  return 'bg-emerald-900 text-emerald-200';
+function statusTone(status: string): 'primary' | 'secondary' | 'neutral' {
+  if (status === 'fired') return 'secondary';
+  if (status === 'dismissed' || status === 'cancelled') return 'neutral';
+  return 'primary';
 }

@@ -1,4 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Button } from './ui/Button';
+import { Field as UiField, Input, Textarea } from './ui/Input';
+import { SegmentedTabs } from './ui/Tabs';
+import { Dialog } from './ui/Dialog';
+import { cn } from './ui/cn';
 
 // -------------------------------------------------------------------------
 // Types
@@ -150,7 +155,7 @@ function writeUrlState(view: ViewMode, anchor: Date, scope: Scope) {
 // event chips always include the owner's name when scope=household.
 // -------------------------------------------------------------------------
 
-const FALLBACK_COLORS = ['#60a5fa', '#f472b6', '#34d399', '#fbbf24', '#a78bfa', '#fb7185'];
+const FALLBACK_COLORS = ['#7a7555', '#805604', '#48605f', '#a66b4a', '#5a6e3c', '#8e5b7a'];
 function hashColor(id: string): string {
   let h = 0;
   for (let i = 0; i < id.length; i += 1) h = (h * 31 + id.charCodeAt(i)) >>> 0;
@@ -158,7 +163,7 @@ function hashColor(id: string): string {
 }
 
 function colorFor(ownerUserId: string | undefined, members: HouseholdMember[]): string {
-  if (!ownerUserId) return '#60a5fa';
+  if (!ownerUserId) return '#7a7555';
   const m = members.find((x) => x.id === ownerUserId);
   return m?.color || hashColor(ownerUserId);
 }
@@ -272,78 +277,59 @@ export function Calendar({ currentUserId }: CalendarProps) {
   }
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col">
-      <header className="flex flex-wrap items-center gap-3 border-b border-slate-800 px-4 py-3">
-        <nav className="flex gap-1 rounded bg-slate-800 p-1 text-sm">
-          {(['agenda', 'week', 'day'] as ViewMode[]).map((v) => (
-            <button
-              key={v}
-              onClick={() => setView(v)}
-              className={`rounded px-3 py-1 capitalize ${
-                view === v ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              {v}
-            </button>
-          ))}
-        </nav>
+    <section className="flex min-h-0 flex-1 flex-col bg-surface">
+      <header className="flex flex-wrap items-center gap-3 border-b border-outline-variant/60 bg-surface/60 px-4 py-3 backdrop-blur md:px-margin">
+        <SegmentedTabs<ViewMode>
+          value={view}
+          onChange={setView}
+          tabs={[
+            { id: 'agenda', label: 'Agenda' },
+            { id: 'week', label: 'Week' },
+            { id: 'day', label: 'Day' },
+          ]}
+          size="sm"
+        />
         <div className="flex items-center gap-1">
-          <button
-            onClick={() => shift(-1)}
-            className="rounded bg-slate-700 px-2 py-1 text-sm hover:bg-slate-600"
-            aria-label="Previous"
-          >
+          <Button size="sm" variant="outline" onClick={() => shift(-1)} aria-label="Previous">
             ←
-          </button>
-          <button
-            onClick={() => setAnchor(new Date())}
-            className="rounded bg-slate-700 px-3 py-1 text-sm hover:bg-slate-600"
-          >
+          </Button>
+          <Button size="sm" variant="tonal" onClick={() => setAnchor(new Date())}>
             Today
-          </button>
-          <button
-            onClick={() => shift(1)}
-            className="rounded bg-slate-700 px-2 py-1 text-sm hover:bg-slate-600"
-            aria-label="Next"
-          >
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => shift(1)} aria-label="Next">
             →
-          </button>
+          </Button>
         </div>
-        <div className="text-sm text-slate-300">{formatRangeLabel(view, anchor)}</div>
-        <nav className="ml-auto flex gap-1 rounded bg-slate-800 p-1 text-sm">
-          {(['self', 'household'] as Scope[]).map((s) => (
-            <button
-              key={s}
-              onClick={() => setScope(s)}
-              className={`rounded px-3 py-1 capitalize ${
-                scope === s ? 'bg-blue-600' : 'text-slate-300 hover:bg-slate-700'
-              }`}
-            >
-              {s === 'self' ? 'Mine' : 'Everyone'}
-            </button>
-          ))}
-        </nav>
-        {primary?.canWrite && (
-          <button
-            onClick={() => setEditor({ mode: 'create', anchorDate: anchor })}
-            className="rounded bg-blue-600 px-3 py-1 text-sm font-medium text-white hover:bg-blue-500"
-          >
-            + New event
-          </button>
-        )}
+        <div className="text-body-md text-on-surface-variant">{formatRangeLabel(view, anchor)}</div>
+        <div className="ml-auto flex items-center gap-2">
+          <SegmentedTabs<Scope>
+            value={scope}
+            onChange={setScope}
+            tabs={[
+              { id: 'self', label: 'Mine' },
+              { id: 'household', label: 'Everyone' },
+            ]}
+            size="sm"
+          />
+          {primary?.canWrite && (
+            <Button size="sm" onClick={() => setEditor({ mode: 'create', anchorDate: anchor })}>
+              + New event
+            </Button>
+          )}
+        </div>
       </header>
 
       {primary && !primary.canWrite && (
-        <div className="border-b border-amber-900 bg-amber-900/30 px-4 py-2 text-sm text-amber-100">
+        <div className="border-b border-outline-variant/60 bg-secondary-container px-4 py-2 text-body-md text-secondary-on-container md:px-margin">
           Reconnect Google to enable creating & editing events.{' '}
-          <a className="underline" href="/auth/google/calendar/connect">
+          <a className="underline underline-offset-2" href="/auth/google/calendar/connect">
             Reconnect
           </a>
         </div>
       )}
 
       {scope === 'household' && members.length > 0 && (
-        <div className="flex flex-wrap gap-2 border-b border-slate-800 px-4 py-2 text-xs">
+        <div className="flex flex-wrap gap-2 border-b border-outline-variant/60 bg-surface-container-low/70 px-4 py-2 text-label-md md:px-margin">
           {members.map((m) => {
             const off = hidden.has(m.id);
             const color = m.color || hashColor(m.id);
@@ -351,13 +337,14 @@ export function Calendar({ currentUserId }: CalendarProps) {
               <button
                 key={m.id}
                 onClick={() => toggleHidden(m.id)}
-                className={`flex items-center gap-2 rounded px-2 py-1 ${
-                  off ? 'opacity-40' : ''
-                } bg-slate-800 hover:bg-slate-700`}
+                className={cn(
+                  'flex items-center gap-2 rounded-full bg-surface-lowest px-3 py-1 shadow-ambient transition-all duration-200 ease-soft hover:-translate-y-px',
+                  off && 'opacity-40',
+                )}
                 title={off ? `Show ${m.displayName}` : `Hide ${m.displayName}`}
               >
                 <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: color }} />
-                <span>{m.displayName}</span>
+                <span className="text-on-surface">{m.displayName}</span>
               </button>
             );
           })}
@@ -365,14 +352,14 @@ export function Calendar({ currentUserId }: CalendarProps) {
       )}
 
       {error && (
-        <div className="border-b border-red-900 bg-red-900/40 px-4 py-2 text-sm text-red-200">
+        <div className="border-b border-outline-variant/60 bg-danger-container px-4 py-2 text-body-md text-danger-on-container md:px-margin">
           {error}
         </div>
       )}
 
       <div className="flex min-h-0 flex-1 overflow-auto">
         {loading ? (
-          <div className="p-4 text-slate-400">Loading…</div>
+          <div className="p-6 text-body-md text-on-surface-variant">Loading…</div>
         ) : view === 'agenda' ? (
           <AgendaView
             events={visible}
@@ -472,7 +459,7 @@ function AgendaView({
   const keys = [...byDay.keys()].sort();
 
   if (keys.length === 0) {
-    return <div className="p-6 text-slate-400">Nothing on the calendar.</div>;
+    return <div className="p-6 text-body-md text-on-surface-variant">Nothing on the calendar.</div>;
   }
 
   return (
@@ -481,8 +468,8 @@ function AgendaView({
         const day = parseYmd(k);
         const items = byDay.get(k)!.sort((a, b) => a.sortKey - b.sortKey);
         return (
-          <li key={k} className="border-b border-slate-800">
-            <div className="bg-slate-900/60 px-4 py-1.5 text-xs uppercase tracking-wide text-slate-400">
+          <li key={k} className="border-b border-outline-variant/60">
+            <div className="bg-surface-container-low px-4 py-2 text-label-sm text-on-surface-variant md:px-margin">
               {day.toLocaleDateString([], {
                 weekday: 'long',
                 month: 'short',
@@ -496,25 +483,31 @@ function AgendaView({
                 return (
                   <li
                     key={`${event.id}-${i}`}
-                    className={`flex items-center gap-3 border-l-4 px-4 py-2 hover:bg-slate-800/40 ${
-                      editable ? 'cursor-pointer' : ''
-                    } ${event.hasConflict ? 'bg-red-950/40' : ''}`}
+                    className={cn(
+                      'flex items-center gap-3 border-l-4 px-4 py-2.5 transition-colors duration-200 ease-soft hover:bg-surface-container-low md:px-margin',
+                      editable && 'cursor-pointer',
+                      event.hasConflict && 'bg-danger-container/50',
+                    )}
                     style={{ borderLeftColor: color }}
                     onClick={() => {
                       if (editable) onOpenEvent(event);
                       else if (event.htmlLink) window.open(event.htmlLink, '_blank', 'noopener');
                     }}
                   >
-                    <span className="w-36 shrink-0 text-xs text-slate-400">{label}</span>
-                    <span className="flex-1 text-sm">{event.title || '(no title)'}</span>
+                    <span className="w-36 shrink-0 text-label-md text-on-surface-variant">
+                      {label}
+                    </span>
+                    <span className="flex-1 text-body-md text-on-surface">
+                      {event.title || '(no title)'}
+                    </span>
                     <EventBadges event={event} />
                     {event.location && (
-                      <span className="hidden max-w-[20ch] truncate text-xs text-slate-400 sm:inline">
+                      <span className="hidden max-w-[20ch] truncate text-label-md text-on-surface-variant sm:inline">
                         {event.location}
                       </span>
                     )}
                     {scope === 'household' && event.ownerDisplayName && (
-                      <span className="rounded bg-slate-800 px-2 py-0.5 text-xs text-slate-300">
+                      <span className="rounded-full bg-surface-container px-2.5 py-0.5 text-label-sm text-on-surface-variant">
                         {event.ownerDisplayName}
                       </span>
                     )}
@@ -588,7 +581,7 @@ function WeekView({
     <div className="flex w-full flex-col">
       {/* Day headers */}
       <div
-        className="grid border-b border-slate-800 text-xs"
+        className="grid border-b border-outline-variant/60 text-label-sm"
         style={{ gridTemplateColumns: `3.5rem repeat(${days}, minmax(0, 1fr))` }}
       >
         <div />
@@ -597,12 +590,20 @@ function WeekView({
           return (
             <div
               key={toYmd(d)}
-              className={`px-2 py-2 text-center ${
-                isToday ? 'bg-blue-900/30 text-blue-300' : 'text-slate-400'
-              }`}
+              className={cn(
+                'px-2 py-2 text-center',
+                isToday ? 'bg-primary-container/60 text-primary-on-container' : 'text-on-surface-variant',
+              )}
             >
-              <div className="uppercase">{d.toLocaleDateString([], { weekday: 'short' })}</div>
-              <div className="text-base font-semibold text-slate-200">{d.getDate()}</div>
+              <div>{d.toLocaleDateString([], { weekday: 'short' })}</div>
+              <div
+                className={cn(
+                  'font-display text-headline-md',
+                  isToday ? 'text-primary-on-container' : 'text-on-surface',
+                )}
+              >
+                {d.getDate()}
+              </div>
             </div>
           );
         })}
@@ -610,12 +611,10 @@ function WeekView({
 
       {/* All-day lane */}
       <div
-        className="grid border-b border-slate-800"
+        className="grid border-b border-outline-variant/60 bg-surface-container-low/40"
         style={{ gridTemplateColumns: `3.5rem repeat(${days}, minmax(0, 1fr))` }}
       >
-        <div className="px-2 py-1 text-right text-[10px] uppercase tracking-wide text-slate-500">
-          all day
-        </div>
+        <div className="px-2 py-1 text-right text-label-sm text-on-surface-variant/80">all day</div>
         {dayDates.map((d) => {
           const items = allDayByDay.get(toYmd(d))!;
           return (
@@ -645,11 +644,11 @@ function WeekView({
         }}
       >
         {/* hour gutter */}
-        <div className="relative border-r border-slate-800">
+        <div className="relative border-r border-outline-variant/40">
           {Array.from({ length: HOURS_TOTAL }, (_, h) => (
             <div
               key={h}
-              className="absolute right-1 -translate-y-1/2 text-[10px] text-slate-500"
+              className="absolute right-1 -translate-y-1/2 text-label-sm text-on-surface-variant/70"
               style={{ top: `${h * PX_PER_HOUR}px` }}
             >
               {h === 0 ? '' : `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`}
@@ -664,13 +663,16 @@ function WeekView({
           return (
             <div
               key={toYmd(d)}
-              className={`relative border-r border-slate-800 ${isToday ? 'bg-blue-900/10' : ''}`}
+              className={cn(
+                'relative border-r border-outline-variant/40',
+                isToday && 'bg-primary-container/15',
+              )}
             >
               {/* hour lines */}
               {Array.from({ length: HOURS_TOTAL }, (_, h) => (
                 <div
                   key={h}
-                  className="absolute inset-x-0 border-t border-slate-800/60"
+                  className="absolute inset-x-0 border-t border-outline-variant/30"
                   style={{ top: `${h * PX_PER_HOUR}px` }}
                 />
               ))}
@@ -728,10 +730,10 @@ function NowLine() {
   const top = (ms / 3_600_000) * PX_PER_HOUR;
   return (
     <div
-      className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-red-500"
+      className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-danger"
       style={{ top: `${top}px` }}
     >
-      <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-red-500" />
+      <span className="absolute -left-1 -top-1 h-2 w-2 rounded-full bg-danger" />
     </div>
   );
 }
@@ -757,11 +759,13 @@ function EventChip({
   const editable = isEditable(event, currentUserId);
   return (
     <div
-      className={`h-full overflow-hidden rounded border-l-4 ${
-        compact ? 'px-1.5 py-0.5 text-[11px]' : 'p-1 text-xs'
-      } cursor-pointer ${
-        event.hasConflict ? 'bg-red-900/60 ring-1 ring-red-500' : 'bg-slate-800/70'
-      } hover:bg-slate-700`}
+      className={cn(
+        'h-full cursor-pointer overflow-hidden rounded-sm border-l-4 shadow-ambient transition-colors duration-200 ease-soft',
+        compact ? 'px-1.5 py-0.5 text-label-sm' : 'p-1.5 text-label-md',
+        event.hasConflict
+          ? 'bg-danger-container ring-1 ring-danger'
+          : 'bg-surface-lowest hover:bg-surface-container',
+      )}
       style={{ borderLeftColor: color }}
       title={event.title ?? ''}
       onClick={() => {
@@ -770,16 +774,18 @@ function EventChip({
       }}
     >
       <div className="flex items-center gap-1">
-        <div className="flex-1 truncate font-medium text-slate-100">
+        <div className="flex-1 truncate font-medium text-on-surface">
           {event.title || '(no title)'}
         </div>
         <EventBadges event={event} />
       </div>
       {!compact && timeLabel && (
-        <div className="truncate text-[10px] text-slate-400">{timeLabel}</div>
+        <div className="truncate text-label-sm text-on-surface-variant">{timeLabel}</div>
       )}
       {scope === 'household' && event.ownerDisplayName && (
-        <div className="truncate text-[10px] text-slate-400">· {event.ownerDisplayName}</div>
+        <div className="truncate text-label-sm text-on-surface-variant">
+          · {event.ownerDisplayName}
+        </div>
       )}
     </div>
   );
@@ -799,7 +805,7 @@ function EventBadges({ event }: { event: EventRow }) {
   if (event.hasConflict) {
     return (
       <span
-        className="shrink-0 rounded bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white"
+        className="shrink-0 rounded-full bg-danger px-2 py-0.5 text-label-sm text-danger-on"
         title={event.lastPushError ?? 'conflict with Google'}
       >
         conflict
@@ -809,7 +815,7 @@ function EventBadges({ event }: { event: EventRow }) {
   if (event.localDirty) {
     return (
       <span
-        className="shrink-0 rounded bg-slate-700 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-200"
+        className="shrink-0 rounded-full bg-surface-container px-2 py-0.5 text-label-sm text-on-surface-variant"
         title={`Pending ${event.pendingOp ?? 'sync'}${
           event.lastPushError ? ` — ${event.lastPushError}` : ''
         }`}
@@ -967,137 +973,109 @@ function EventEditor({
     }
   }
 
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-md rounded-lg bg-slate-900 p-5 shadow-xl"
-        onClick={(e) => e.stopPropagation()}
+  const footer = (
+    <>
+      {existing && (
+        <Button
+          variant="danger"
+          onClick={del}
+          disabled={submitting}
+          className="mr-auto"
+        >
+          Delete
+        </Button>
+      )}
+      <Button variant="ghost" onClick={onClose} disabled={submitting}>
+        Cancel
+      </Button>
+      <Button
+        onClick={submit}
+        disabled={submitting || !title.trim()}
       >
-        <h2 className="mb-4 text-lg font-semibold text-slate-100">
-          {existing ? 'Edit event' : 'New event'}
-        </h2>
+        {existing ? 'Save' : 'Create'}
+      </Button>
+    </>
+  );
 
-        {existing?.hasConflict && (
-          <div className="mb-3 rounded border border-red-700 bg-red-950/60 p-2 text-xs text-red-200">
-            This event has a sync conflict with Google. Keep the server version and drop your local
-            changes?{' '}
-            <button
-              onClick={discard}
-              disabled={submitting}
-              className="ml-1 rounded bg-red-600 px-2 py-0.5 text-xs font-medium text-white hover:bg-red-500 disabled:opacity-50"
-            >
-              Discard my changes
-            </button>
+  return (
+    <Dialog
+      open
+      onClose={onClose}
+      title={existing ? 'Edit event' : 'New event'}
+      footer={footer}
+      size="md"
+    >
+      {existing?.hasConflict && (
+        <div className="mb-3 rounded bg-danger-container p-3 text-body-md text-danger-on-container">
+          This event has a sync conflict with Google. Keep the server version and drop your local
+          changes?{' '}
+          <Button size="sm" variant="danger" onClick={discard} disabled={submitting} className="ml-1">
+            Discard my changes
+          </Button>
+        </div>
+      )}
+
+      <div className="flex flex-col gap-3">
+        <UiField label="Title">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            autoFocus
+          />
+        </UiField>
+        <label className="flex items-center gap-2 text-body-md text-on-surface">
+          <input
+            type="checkbox"
+            checked={allDay}
+            onChange={(e) => setAllDay(e.target.checked)}
+            className="h-4 w-4 rounded border-outline-variant accent-primary"
+          />
+          <span>All day</span>
+        </label>
+        {allDay ? (
+          <div className="grid grid-cols-2 gap-3">
+            <UiField label="Start date">
+              <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
+            </UiField>
+            <UiField label="End date">
+              <Input
+                type="date"
+                value={endDateInclusive}
+                onChange={(e) => setEndDateInclusive(e.target.value)}
+              />
+            </UiField>
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <UiField label="Starts">
+              <Input
+                type="datetime-local"
+                value={startLocal}
+                onChange={(e) => setStartLocal(e.target.value)}
+              />
+            </UiField>
+            <UiField label="Ends">
+              <Input
+                type="datetime-local"
+                value={endLocal}
+                onChange={(e) => setEndLocal(e.target.value)}
+              />
+            </UiField>
           </div>
         )}
-
-        <div className="flex flex-col gap-3 text-sm">
-          <label className="flex flex-col gap-1">
-            <span className="text-slate-300">Title</span>
-            <input
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100 outline-none ring-0 focus:ring-1 focus:ring-blue-500"
-              autoFocus
-            />
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-            <span className="text-slate-300">All day</span>
-          </label>
-          {allDay ? (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-slate-300">Start date</span>
-                <input
-                  type="date"
-                  value={startDate}
-                  onChange={(e) => setStartDate(e.target.value)}
-                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-slate-300">End date</span>
-                <input
-                  type="date"
-                  value={endDateInclusive}
-                  onChange={(e) => setEndDateInclusive(e.target.value)}
-                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-                />
-              </label>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-1">
-                <span className="text-slate-300">Starts</span>
-                <input
-                  type="datetime-local"
-                  value={startLocal}
-                  onChange={(e) => setStartLocal(e.target.value)}
-                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="text-slate-300">Ends</span>
-                <input
-                  type="datetime-local"
-                  value={endLocal}
-                  onChange={(e) => setEndLocal(e.target.value)}
-                  className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-                />
-              </label>
-            </div>
-          )}
-          <label className="flex flex-col gap-1">
-            <span className="text-slate-300">Location</span>
-            <input
-              value={location}
-              onChange={(e) => setLocation(e.target.value)}
-              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-            />
-          </label>
-          <label className="flex flex-col gap-1">
-            <span className="text-slate-300">Description</span>
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={3}
-              className="rounded bg-slate-800 px-2 py-1.5 text-slate-100"
-            />
-          </label>
-        </div>
-
-        {err && <div className="mt-3 text-sm text-red-300">{err}</div>}
-
-        <div className="mt-5 flex items-center gap-2">
-          {existing && (
-            <button
-              onClick={del}
-              disabled={submitting}
-              className="mr-auto rounded bg-red-900/60 px-3 py-1.5 text-sm text-red-200 hover:bg-red-800 disabled:opacity-50"
-            >
-              Delete
-            </button>
-          )}
-          <button
-            onClick={onClose}
-            disabled={submitting}
-            className="rounded bg-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-600 disabled:opacity-50"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={submit}
-            disabled={submitting || !title.trim()}
-            className="rounded bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-500 disabled:opacity-50"
-          >
-            {existing ? 'Save' : 'Create'}
-          </button>
-        </div>
+        <UiField label="Location">
+          <Input value={location} onChange={(e) => setLocation(e.target.value)} />
+        </UiField>
+        <UiField label="Description">
+          <Textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+          />
+        </UiField>
       </div>
-    </div>
+
+      {err && <div className="mt-3 text-body-md text-danger">{err}</div>}
+    </Dialog>
   );
 }
