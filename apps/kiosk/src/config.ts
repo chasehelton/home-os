@@ -3,10 +3,19 @@ export interface KioskConfig {
   healthUrl: string;
   diagnosticsUrl: string;
   kioskMode: boolean;
+  oskHeight: number;
   idleMs: number;
   cleaningMs: number;
   healthIntervalMs: number;
   healthFailureThreshold: number;
+  /**
+   * Optional bearer token used for kiosk device login against
+   * POST /auth/kiosk. When set, the kiosk main process calls that
+   * endpoint before loading the web URL and injects the returned
+   * session cookie. Unset in dev — in dev you log in via the normal
+   * Google OIDC flow in a real browser.
+   */
+  kioskToken: string | null;
 }
 
 function pickInt(raw: string | undefined, fallback: number): number {
@@ -30,10 +39,16 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): KioskConfig {
     healthUrl,
     diagnosticsUrl,
     kioskMode,
+    // Height (px) reserved at the bottom of the screen for an on-screen
+    // keyboard (wvkbd/squeekboard). Electron on Wayland can't discover
+    // layer-shell exclusive zones, so we subtract this manually. Set to
+    // 0 if no OSK is running.
+    oskHeight: pickInt(env.HOME_OS_KIOSK_OSK_HEIGHT, 0),
     idleMs: pickInt(env.HOME_OS_KIOSK_IDLE_MS, 5 * 60 * 1000),
     cleaningMs: pickInt(env.HOME_OS_KIOSK_CLEANING_MS, 30 * 1000),
     healthIntervalMs: pickInt(env.HOME_OS_KIOSK_HEALTH_INTERVAL_MS, 15_000),
     healthFailureThreshold: pickInt(env.HOME_OS_KIOSK_HEALTH_FAILURES, 2),
+    kioskToken: env.HOME_OS_KIOSK_TOKEN?.trim() || null,
   };
 }
 

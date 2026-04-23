@@ -78,7 +78,31 @@ const EnvSchema = z.object({
   HOME_OS_VAPID_SUBJECT: z.string().default('mailto:home-os@localhost'),
   HOME_OS_REMINDER_TICK_MS: z.coerce.number().int().positive().default(20_000),
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-});
+
+  // Kiosk device auth (Pi Electron kiosk bypasses Google OIDC because
+  // Google blocks OAuth in embedded browsers). When set, POST /auth/kiosk
+  // accepts `Authorization: Bearer <token>` and mints a normal session
+  // cookie for the configured user. Both values are required together.
+  //   TOKEN: long random secret (>= 32 chars). Stored in the kiosk's
+  //   systemd EnvironmentFile. Rotate by editing both sides.
+  //   USER_EMAIL: the user the kiosk logs in as. Must also appear in
+  //   HOME_OS_ALLOWED_EMAILS so the rest of the app's authz stays
+  //   consistent.
+  HOME_OS_KIOSK_TOKEN: z.string().min(32).optional(),
+  HOME_OS_KIOSK_USER_EMAIL: z.string().email().optional(),
+})
+  .superRefine((env, ctx) => {
+    const hasToken = Boolean(env.HOME_OS_KIOSK_TOKEN);
+    const hasEmail = Boolean(env.HOME_OS_KIOSK_USER_EMAIL);
+    if (hasToken !== hasEmail) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['HOME_OS_KIOSK_TOKEN'],
+        message:
+          'HOME_OS_KIOSK_TOKEN and HOME_OS_KIOSK_USER_EMAIL must be set together',
+      });
+    }
+  });
 
 export type Env = z.infer<typeof EnvSchema>;
 

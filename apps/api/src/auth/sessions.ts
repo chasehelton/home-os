@@ -10,6 +10,7 @@ export interface CreateSessionInput {
   userId: string;
   now?: Date;
   ttlMs?: number;
+  authMethod?: 'google' | 'kiosk';
 }
 
 export function createSession(
@@ -28,6 +29,7 @@ export function createSession(
       id,
       userId: input.userId,
       expiresAt: expiresAt.toISOString(),
+      authMethod: input.authMethod ?? 'google',
     })
     .run();
   return { id, expiresAt };

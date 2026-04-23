@@ -26,6 +26,13 @@ export const sessions = sqliteTable('sessions', {
     .notNull()
     .references(() => users.id, { onDelete: 'cascade' }),
   expiresAt: text('expires_at').notNull(),
+  // How this session was minted. 'google' = standard Google OIDC login;
+  // 'kiosk' = machine-to-machine bearer-token auth used by the Pi kiosk
+  // (see POST /auth/kiosk). Tracked so we can audit / revoke kiosk
+  // sessions separately if the kiosk token is ever rotated.
+  authMethod: text('auth_method', { enum: ['google', 'kiosk'] })
+    .notNull()
+    .default('google'),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`),

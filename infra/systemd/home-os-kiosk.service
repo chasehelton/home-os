@@ -28,6 +28,14 @@ Type=simple
 # cookies / service worker / push all behave identically to the browser.
 Environment=HOME_OS_KIOSK_URL=https://pi4.tailebbd07.ts.net
 Environment=HOME_OS_KIOSK_MODE=1
+# Reserve space at the bottom of the screen for the wvkbd on-screen
+# keyboard (home-os-osk.service). Must match its -L height.
+Environment=HOME_OS_KIOSK_OSK_HEIGHT=320
+# Kiosk device auth — Electron cannot complete Google OAuth (Google blocks
+# embedded browsers), so the kiosk logs in via POST /auth/kiosk using a
+# bearer secret stored in a local EnvironmentFile. Path must be root-owned
+# 0600 and contain HOME_OS_KIOSK_TOKEN=<>. See docs/DEPLOYMENT.md.
+EnvironmentFile=-/etc/home-os-kiosk.env
 # Wayland socket created by labwc. XDG_RUNTIME_DIR comes from PAM.
 Environment=WAYLAND_DISPLAY=wayland-0
 # Electron 20+ on some Linux distros needs this to silence an ANGLE warning.
