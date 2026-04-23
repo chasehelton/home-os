@@ -79,6 +79,17 @@ function createWindow(): void {
   const win = new BrowserWindow(buildWindowOptions());
   mainWindow = win;
 
+  // Forward renderer/preload console messages to the main process stdout
+  // so journalctl --user -u home-os-kiosk.service shows them.
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2 || /^\[kiosk-preload\]/.test(message)) {
+      console.log(`[renderer L${level}] ${message} (${sourceId}:${line})`);
+    }
+  });
+  win.webContents.on('preload-error', (_e, preloadPath, error) => {
+    console.error(`[kiosk] preload-error in ${preloadPath}:`, error);
+  });
+
   // Hide mouse cursor in kiosk mode — pure CSS injected after load.
   win.webContents.on('did-finish-load', () => {
     loadFailures = 0;
@@ -303,25 +314,35 @@ function signalOsk(signal: 'SIGUSR1' | 'SIGUSR2'): void {
     if (oskPidCache == null) return false;
     try {
       process.kill(oskPidCache, signal);
+      console.log(`[kiosk] sent ${signal} to wvkbd pid=${oskPidCache}`);
       return true;
-    } catch {
+    } catch (err) {
+      console.warn(`[kiosk] signal ${signal} failed on pid=${oskPidCache}:`, err);
       oskPidCache = null;
       return false;
     }
   };
   if (trySignal()) return;
   oskPidCache = findOskPid();
+  console.log(`[kiosk] resolved wvkbd pid=${oskPidCache}`);
   if (oskPidCache != null) trySignal();
 }
 
-ipcMain.on('kiosk:osk-show', () => signalOsk('SIGUSR2'));
-ipcMain.on('kiosk:osk-hide', () => signalOsk('SIGUSR1'));
+ipcMain.on('kiosk:osk-show', () => {
+  console.log('[kiosk] osk-show IPC received');
+  signalOsk('SIGUSR2');
+});
+ipcMain.on('kiosk:osk-hide', () => {
+  console.log('[kiosk] osk-hide IPC received');
+  signalOsk('SIGUSR1');
+});
 
 // ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  console.log('[kiosk] app ready, cfg:', { url: cfg.url, hasKioskToken: !!cfg.kioskToken, oskHeight: cfg.oskHeight });
   createWindow();
   startHealthLoop();
 

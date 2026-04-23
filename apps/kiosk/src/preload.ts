@@ -4,7 +4,27 @@
 // idle dim so those concerns never leak into the web app itself.
 
 import { contextBridge, ipcRenderer } from 'electron';
-import { initialIdleState, onActivity, tickIdle, type IdleState } from './idle.js';
+
+// Inlined from ./idle.ts because sandboxed preloads cannot `require()`
+// sibling files. Bundling would be heavier than just inlining 20 lines
+// of pure logic; the original ./idle.ts is still imported (and tested)
+// by main.ts.
+interface IdleState {
+  lastActivityAt: number;
+  dimmed: boolean;
+}
+function initialIdleState(now: number): IdleState {
+  return { lastActivityAt: now, dimmed: false };
+}
+function onActivity(_state: IdleState, now: number): IdleState {
+  return { lastActivityAt: now, dimmed: false };
+}
+function tickIdle(state: IdleState, now: number, thresholdMs: number): IdleState {
+  const idleFor = now - state.lastActivityAt;
+  const shouldDim = idleFor >= thresholdMs;
+  if (shouldDim === state.dimmed) return state;
+  return { ...state, dimmed: shouldDim };
+}
 
 interface KioskConfigBridge {
   idleMs: number;
@@ -146,7 +166,38 @@ function startIdleLoop(): void {
   }
 }
 
+function installTouchStyles(): void {
+  // Defense in depth: even if the web bundle is stale (service worker
+  // cache), make sure touch drags scroll instead of selecting text.
+  const style = document.createElement('style');
+  style.id = 'home-os-kiosk-touch-styles';
+  style.textContent = `
+/* touch-action does NOT inherit, so apply to every element so any scroll
+   container the app picks (often a deep nested div) pans vertically
+   instead of starting a text selection. */
+* {
+  touch-action: pan-y !important;
+  -webkit-user-select: none !important;
+  user-select: none !important;
+  -webkit-touch-callout: none !important;
+}
+html, body, #root {
+  -webkit-tap-highlight-color: transparent !important;
+  overscroll-behavior: contain;
+}
+input, textarea, select,
+[contenteditable='true'], [contenteditable=''],
+.prose-home, .select-text, .select-text * {
+  -webkit-user-select: text !important;
+  user-select: text !important;
+  touch-action: manipulation !important;
+}
+`;
+  document.head.appendChild(style);
+}
+
 function install(): void {
+  installTouchStyles();
   installOverlay();
   startIdleLoop();
   installOskTrigger();
@@ -197,10 +248,13 @@ function setOskVisible(visible: boolean): void {
 }
 
 function installOskTrigger(): void {
+  console.log('[kiosk-preload] installing OSK focus listeners');
   window.addEventListener(
     'focusin',
     (e) => {
-      if (isEditable(e.target)) {
+      const ed = isEditable(e.target);
+      console.log('[kiosk-preload] focusin', (e.target as Element | null)?.tagName, 'editable=', ed);
+      if (ed) {
         setOskVisible(true);
         // Ensure the focused field isn't hidden behind the keyboard.
         // wvkbd paints the bottom ~320px; scrollIntoView('center')
