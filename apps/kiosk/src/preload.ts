@@ -149,6 +149,83 @@ function startIdleLoop(): void {
 function install(): void {
   installOverlay();
   startIdleLoop();
+  installOskTrigger();
+}
+
+// ---------------------------------------------------------------------------
+// On-screen keyboard trigger.
+//
+// The Pi kiosk runs wvkbd as a separate systemd unit that starts hidden.
+// We show it only when an editable element takes focus, and hide it
+// again on blur. wvkbd listens for SIGUSR1/SIGUSR2 to toggle visibility;
+// the main process handles that (see ipcMain handlers in main.ts).
+// ---------------------------------------------------------------------------
+
+const EDITABLE_INPUT_TYPES = new Set([
+  'text',
+  'search',
+  'url',
+  'email',
+  'tel',
+  'password',
+  'number',
+  'date',
+  'datetime-local',
+  'month',
+  'time',
+  'week',
+  // Omitted: 'submit' | 'button' | 'checkbox' | 'radio' | 'file' | 'hidden' | ...
+]);
+
+function isEditable(el: EventTarget | null): boolean {
+  if (!el || !(el instanceof Element)) return false;
+  const tag = el.tagName;
+  if (tag === 'TEXTAREA') return true;
+  if (tag === 'INPUT') {
+    const type = ((el as HTMLInputElement).type || 'text').toLowerCase();
+    return EDITABLE_INPUT_TYPES.has(type);
+  }
+  if (el instanceof HTMLElement && el.isContentEditable) return true;
+  return false;
+}
+
+let oskVisible = false;
+function setOskVisible(visible: boolean): void {
+  if (visible === oskVisible) return;
+  oskVisible = visible;
+  ipcRenderer.send(visible ? 'kiosk:osk-show' : 'kiosk:osk-hide');
+}
+
+function installOskTrigger(): void {
+  window.addEventListener(
+    'focusin',
+    (e) => {
+      if (isEditable(e.target)) {
+        setOskVisible(true);
+        // Ensure the focused field isn't hidden behind the keyboard.
+        // wvkbd paints the bottom ~320px; scrollIntoView('center')
+        // handles both shallow scroll containers and the document.
+        if (e.target instanceof HTMLElement) {
+          queueMicrotask(() =>
+            (e.target as HTMLElement).scrollIntoView({ block: 'center', behavior: 'smooth' }),
+          );
+        }
+      }
+    },
+    { capture: true },
+  );
+  window.addEventListener(
+    'focusout',
+    (e) => {
+      if (!isEditable(e.target)) return;
+      // focusout fires before the next focusin; defer the hide so
+      // moving between two fields doesn't make the keyboard flash.
+      setTimeout(() => {
+        if (!isEditable(document.activeElement)) setOskVisible(false);
+      }, 100);
+    },
+    { capture: true },
+  );
 }
 
 async function boot(): Promise<void> {

@@ -4,6 +4,7 @@
 
 import { app, BrowserWindow, globalShortcut, ipcMain, screen, net, session } from 'electron';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { loadConfig, type KioskConfig } from './config.js';
 import { initialHealthState, onHealthResult, type HealthState } from './health.js';
 
@@ -265,6 +266,56 @@ ipcMain.handle('kiosk:config', () => ({
   kioskMode: cfg.kioskMode,
   diagnosticsUrl: cfg.diagnosticsUrl,
 }));
+
+// ---------------------------------------------------------------------------
+// On-screen keyboard bridge.
+//
+// The wvkbd process runs as its own systemd unit started with --hidden.
+// It listens for SIGUSR2 (show) and SIGUSR1 (hide). Renderer preload
+// sends these IPC events on focusin/focusout of editable elements.
+// PID is discovered lazily and re-resolved if the signal fails (e.g.
+// after wvkbd was restarted by its systemd unit).
+// ---------------------------------------------------------------------------
+
+const OSK_COMM = 'wvkbd-mobintl';
+let oskPidCache: number | null = null;
+
+function findOskPid(): number | null {
+  try {
+    for (const dir of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(dir)) continue;
+      let comm: string;
+      try {
+        comm = fs.readFileSync(`/proc/${dir}/comm`, 'utf8').trim();
+      } catch {
+        continue;
+      }
+      if (comm === OSK_COMM) return Number(dir);
+    }
+  } catch {
+    // /proc may not exist on non-linux — caller logs.
+  }
+  return null;
+}
+
+function signalOsk(signal: 'SIGUSR1' | 'SIGUSR2'): void {
+  const trySignal = (): boolean => {
+    if (oskPidCache == null) return false;
+    try {
+      process.kill(oskPidCache, signal);
+      return true;
+    } catch {
+      oskPidCache = null;
+      return false;
+    }
+  };
+  if (trySignal()) return;
+  oskPidCache = findOskPid();
+  if (oskPidCache != null) trySignal();
+}
+
+ipcMain.on('kiosk:osk-show', () => signalOsk('SIGUSR2'));
+ipcMain.on('kiosk:osk-hide', () => signalOsk('SIGUSR1'));
 
 // ---------------------------------------------------------------------------
 // Lifecycle

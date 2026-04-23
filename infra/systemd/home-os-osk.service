@@ -32,7 +32,7 @@ Type=simple
 Environment=WAYLAND_DISPLAY=wayland-0
 # Height in pixels for both portrait and landscape; the Pi monitor is
 # landscape so only -L matters, but -H is set for completeness.
-ExecStart=/usr/bin/wvkbd-mobintl -L 320 -H 360 --bg 222222 --fg 333333 --text ffffff --fg-sp 444444
+ExecStart=/usr/bin/wvkbd-mobintl --hidden -L 320 -H 360 --bg 222222 --fg 333333 --text ffffff --fg-sp 444444
 Restart=on-failure
 RestartSec=3
 StartLimitIntervalSec=60
