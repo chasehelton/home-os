@@ -40,5 +40,7 @@ cd "$KIOSK_DIR"
 exec "$ELECTRON_BIN" \
   --ozone-platform=wayland \
   --enable-features=UseOzonePlatform,WaylandWindowDecorations \
+  --touch-events=enabled \
+  --enable-pinch \
   --no-sandbox \
   "$KIOSK_DIR/dist/main.js"
