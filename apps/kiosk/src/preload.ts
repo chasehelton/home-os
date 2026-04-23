@@ -198,9 +198,139 @@ input, textarea, select,
 
 function install(): void {
   installTouchStyles();
+  installTouchScrollPolyfill();
   installOverlay();
   startIdleLoop();
   installOskTrigger();
+}
+
+// ---------------------------------------------------------------------------
+// Touch-scroll polyfill.
+//
+// On Electron/Wayland with labwc, touchscreen events are delivered to
+// Chromium but the gesture pipeline doesn't always synthesize scroll
+// events from touch sequences (we see touchstart/touchmove fire fine,
+// but the page never scrolls). Rather than fight Chromium, manually
+// translate touchmove deltas into scrollBy calls on the nearest
+// scrollable ancestor (or the viewport).
+// ---------------------------------------------------------------------------
+
+function findScrollableAncestor(start: Element | null): Element | Window {
+  let el: Element | null = start;
+  while (el && el !== document.body && el !== document.documentElement) {
+    const cs = getComputedStyle(el);
+    const ovy = cs.overflowY;
+    if ((ovy === 'auto' || ovy === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+      return el;
+    }
+    el = el.parentElement;
+  }
+  // Fall back to the viewport — works when html/body are overflow:visible
+  // and the document itself is taller than the window.
+  return window;
+}
+
+function installTouchScrollPolyfill(): void {
+  let lastY = 0;
+  let activeTarget: Element | Window | null = null;
+  let pointerId: number | null = null;
+  let moved = false;
+
+  window.addEventListener(
+    'touchstart',
+    (e) => {
+      if (e.touches.length !== 1) {
+        activeTarget = null;
+        return;
+      }
+      const t = e.touches[0];
+      if (!t) return;
+      // Don't hijack scrolling for inputs / contenteditable so caret
+      // placement still works.
+      if (isEditable(t.target)) {
+        activeTarget = null;
+        return;
+      }
+      lastY = t.clientY;
+      activeTarget = findScrollableAncestor(t.target as Element | null);
+      moved = false;
+    },
+    { capture: true, passive: true },
+  );
+
+  window.addEventListener(
+    'touchmove',
+    (e) => {
+      if (!activeTarget || e.touches.length !== 1) return;
+      const t = e.touches[0];
+      if (!t) return;
+      const y = t.clientY;
+      const dy = lastY - y;
+      lastY = y;
+      if (dy === 0) return;
+      moved = true;
+      if (activeTarget === window) {
+        window.scrollBy(0, dy);
+      } else {
+        (activeTarget as Element).scrollTop += dy;
+      }
+    },
+    { capture: true, passive: true },
+  );
+
+  window.addEventListener(
+    'touchend',
+    () => {
+      activeTarget = null;
+    },
+    { capture: true, passive: true },
+  );
+
+  // Pointer-events fallback for environments where Chromium converts
+  // touch into pointer events with pointerType==='touch' but does not
+  // emit touch events at all.
+  window.addEventListener(
+    'pointerdown',
+    (e) => {
+      if (e.pointerType !== 'touch') return;
+      if (isEditable(e.target)) {
+        pointerId = null;
+        return;
+      }
+      pointerId = e.pointerId;
+      lastY = e.clientY;
+      activeTarget = findScrollableAncestor(e.target as Element | null);
+      moved = false;
+    },
+    { capture: true, passive: true },
+  );
+
+  window.addEventListener(
+    'pointermove',
+    (e) => {
+      if (e.pointerType !== 'touch' || pointerId !== e.pointerId || !activeTarget) return;
+      const dy = lastY - e.clientY;
+      lastY = e.clientY;
+      if (dy === 0) return;
+      moved = true;
+      if (activeTarget === window) {
+        window.scrollBy(0, dy);
+      } else {
+        (activeTarget as Element).scrollTop += dy;
+      }
+    },
+    { capture: true, passive: true },
+  );
+
+  window.addEventListener(
+    'pointerup',
+    () => {
+      pointerId = null;
+      activeTarget = null;
+      void moved; // reserved for future click suppression after a drag
+    },
+    { capture: true, passive: true },
+  );
 }
 
 // ---------------------------------------------------------------------------
