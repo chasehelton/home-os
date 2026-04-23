@@ -200,8 +200,110 @@ function install(): void {
   installTouchStyles();
   installTouchScrollPolyfill();
   installOverlay();
+  installScrollButtons();
   startIdleLoop();
   installOskTrigger();
+}
+
+// ---------------------------------------------------------------------------
+// Floating scroll buttons.
+//
+// Electron 32 on labwc doesn't reliably deliver wl_touch (or X11 XInput2
+// touch) events to the renderer on this Pi, so finger drags don't scroll.
+// As a guaranteed-to-work fallback, we paint large up/down arrow buttons
+// docked on the right edge that scroll the nearest scrollable ancestor
+// (or the viewport) on press — with press-and-hold auto-repeat for fast
+// travel through long pages.
+// ---------------------------------------------------------------------------
+
+function findScrollRoot(): Element | Window {
+  // Look for a scrollable element in the main content area first so the
+  // buttons scroll the inner list, not the sidebar. Fall back to the
+  // viewport, which works when html/body overflow normally.
+  const candidates = Array.from(document.querySelectorAll<HTMLElement>('main *, main'));
+  for (const el of candidates) {
+    const cs = getComputedStyle(el);
+    if ((cs.overflowY === 'auto' || cs.overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+      return el;
+    }
+  }
+  return window;
+}
+
+function scrollByAmount(delta: number): void {
+  const target = findScrollRoot();
+  if (target === window) {
+    window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+  } else {
+    (target as Element).scrollTop += delta;
+  }
+}
+
+function makeScrollButton(label: string, delta: number, bottom: string): HTMLButtonElement {
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.setAttribute('aria-label', label === '▲' ? 'Scroll up' : 'Scroll down');
+  btn.textContent = label;
+  btn.style.cssText = [
+    'position:fixed',
+    'right:16px',
+    `bottom:${bottom}`,
+    'width:64px',
+    'height:64px',
+    'border-radius:9999px',
+    'border:none',
+    'background:rgba(15,23,42,0.82)',
+    'color:#f8fafc',
+    'font-size:28px',
+    'line-height:1',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'cursor:pointer',
+    'z-index:2147483646',
+    'box-shadow:0 8px 24px rgba(0,0,0,0.35)',
+    'user-select:none',
+    '-webkit-user-select:none',
+    'touch-action:manipulation',
+    'pointer-events:auto',
+  ].join(';');
+
+  let repeatTimer: ReturnType<typeof setInterval> | null = null;
+  const start = (e: Event): void => {
+    e.preventDefault();
+    scrollByAmount(delta);
+    // Press-and-hold auto-repeat after a short delay.
+    repeatTimer = setInterval(() => scrollByAmount(delta), 60);
+  };
+  const stop = (): void => {
+    if (repeatTimer) {
+      clearInterval(repeatTimer);
+      repeatTimer = null;
+    }
+  };
+  // Use both pointer and touch events to maximize compatibility.
+  btn.addEventListener('pointerdown', start);
+  btn.addEventListener('pointerup', stop);
+  btn.addEventListener('pointercancel', stop);
+  btn.addEventListener('pointerleave', stop);
+  btn.addEventListener('touchstart', start, { passive: false });
+  btn.addEventListener('touchend', stop);
+  btn.addEventListener('touchcancel', stop);
+  // Also fire on click so mouse/keyboard activation works.
+  btn.addEventListener('click', (e) => {
+    e.preventDefault();
+    scrollByAmount(delta);
+  });
+  return btn;
+}
+
+function installScrollButtons(): void {
+  const wrap = document.createElement('div');
+  wrap.id = 'home-os-kiosk-scroll-buttons';
+  wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646';
+  wrap.appendChild(makeScrollButton('▲', -320, '104px'));
+  wrap.appendChild(makeScrollButton('▼', 320, '24px'));
+  document.body.appendChild(wrap);
 }
 
 // ---------------------------------------------------------------------------
