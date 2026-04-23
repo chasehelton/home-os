@@ -37,9 +37,15 @@ pkill -u "$(id -u)" -x chromium 2>/dev/null || true
 pkill -u "$(id -u)" -x chromium-browser 2>/dev/null || true
 
 cd "$KIOSK_DIR"
+# Route Electron through XWayland (--ozone-platform=x11) rather than native
+# Wayland. Electron 32 / Chromium 128's native Wayland backend does not
+# reliably deliver wl_touch events to the renderer on labwc, so finger
+# drags never generate scroll gestures. XWayland's XInput2 path has mature
+# touch handling and "just works" for scroll/pinch. We still keep the
+# WAYLAND_DISPLAY env so layer-shell widgets (wvkbd OSK) behave normally.
+export DISPLAY="${DISPLAY:-:0}"
 exec "$ELECTRON_BIN" \
-  --ozone-platform=wayland \
-  --enable-features=UseOzonePlatform,WaylandWindowDecorations \
+  --ozone-platform=x11 \
   --touch-events=enabled \
   --enable-pinch \
   --no-sandbox \
