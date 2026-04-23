@@ -2,13 +2,27 @@
 /// <reference types="vite-plugin-pwa/client" />
 
 import { cleanupOutdatedCaches, precacheAndRoute } from 'workbox-precaching';
+import { registerRoute, NavigationRoute } from 'workbox-routing';
+import { NetworkFirst } from 'workbox-strategies';
 
 declare const self: ServiceWorkerGlobalScope;
 
-// Precache app shell. `__WB_MANIFEST` is replaced at build time by
-// vite-plugin-pwa's injectManifest.
+// Precache hashed static assets (JS/CSS/images). index.html is intentionally
+// excluded in vite.config.ts — see the NetworkFirst navigation handler below.
 precacheAndRoute(self.__WB_MANIFEST);
 cleanupOutdatedCaches();
+
+// Navigations (HTML document loads) use NetworkFirst with a short timeout so
+// a freshly deployed build is picked up on the next load, and we only fall
+// back to cache when the network is unreachable (offline kiosk scenario).
+registerRoute(
+  new NavigationRoute(
+    new NetworkFirst({
+      cacheName: 'home-os-navigations',
+      networkTimeoutSeconds: 3,
+    }),
+  ),
+);
 
 self.addEventListener('install', () => {
   void self.skipWaiting();
