@@ -237,12 +237,16 @@ function findScrollRoot(): Element | Window {
   return window;
 }
 
-function scrollByAmount(delta: number): void {
+function scrollByAmount(delta: number, smooth = false): void {
   const target = findScrollRoot();
   if (target === window) {
-    window.scrollBy({ top: delta, left: 0, behavior: 'auto' });
+    window.scrollBy({ top: delta, left: 0, behavior: smooth ? 'smooth' : 'auto' });
   } else {
-    (target as Element).scrollTop += delta;
+    if (smooth && 'scrollBy' in (target as Element)) {
+      (target as Element).scrollBy({ top: delta, left: 0, behavior: 'smooth' });
+    } else {
+      (target as Element).scrollTop += delta;
+    }
   }
 }
 
@@ -275,20 +279,40 @@ function makeScrollButton(label: string, delta: number, bottom: string): HTMLBut
     'pointer-events:auto',
   ].join(';');
 
-  let repeatTimer: ReturnType<typeof setInterval> | null = null;
+  // Per-frame scroll for press-and-hold: tiny delta every animation
+  // frame feels glidey rather than jerky. On tap, do one smooth scroll
+  // of the full step (Chromium interpolates ~250ms).
+  let rafId: number | null = null;
+  let startTime = 0;
+  const PER_FRAME_PX = delta > 0 ? 8 : -8;
+  const HOLD_THRESHOLD_MS = 160;
+
+  const frame = (): void => {
+    scrollByAmount(PER_FRAME_PX, false);
+    rafId = requestAnimationFrame(frame);
+  };
+
   const start = (e: Event): void => {
     e.preventDefault();
-    scrollByAmount(delta);
-    // Press-and-hold auto-repeat after a short delay.
-    repeatTimer = setInterval(() => scrollByAmount(delta), 60);
+    startTime = performance.now();
+    // Do a small instant kick so the first frame isn't dead time, then
+    // ramp into rAF loop. If the user releases quickly, we'll cancel
+    // rAF and replace the in-progress jump with one smooth scroll of
+    // the full delta (felt like a "tap to page").
+    if (rafId !== null) cancelAnimationFrame(rafId);
+    rafId = requestAnimationFrame(frame);
   };
   const stop = (): void => {
-    if (repeatTimer) {
-      clearInterval(repeatTimer);
-      repeatTimer = null;
+    if (rafId === null) return;
+    cancelAnimationFrame(rafId);
+    rafId = null;
+    const held = performance.now() - startTime;
+    if (held < HOLD_THRESHOLD_MS) {
+      // Treat as a discrete tap — replace the tiny per-frame motion
+      // with a smooth scroll of the full step.
+      scrollByAmount(delta, true);
     }
   };
-  // Use both pointer and touch events to maximize compatibility.
   btn.addEventListener('pointerdown', start);
   btn.addEventListener('pointerup', stop);
   btn.addEventListener('pointercancel', stop);
@@ -296,11 +320,7 @@ function makeScrollButton(label: string, delta: number, bottom: string): HTMLBut
   btn.addEventListener('touchstart', start, { passive: false });
   btn.addEventListener('touchend', stop);
   btn.addEventListener('touchcancel', stop);
-  // Also fire on click so mouse/keyboard activation works.
-  btn.addEventListener('click', (e) => {
-    e.preventDefault();
-    scrollByAmount(delta);
-  });
+  btn.addEventListener('click', (e) => e.preventDefault());
   return btn;
 }
 
