@@ -185,6 +185,13 @@ html, body, #root {
   -webkit-tap-highlight-color: transparent !important;
   overscroll-behavior: contain;
 }
+/* labwc/XWayland clips the last ~40px of a full-height window on this Pi.
+   Reserve that margin at the bottom of the root content so the sidebar
+   profile and any page footer content remain visible. */
+#root {
+  padding-bottom: 40px !important;
+  box-sizing: border-box !important;
+}
 input, textarea, select,
 [contenteditable='true'], [contenteditable=''],
 .prose-home, .select-text, .select-text * {
@@ -301,8 +308,8 @@ function installScrollButtons(): void {
   const wrap = document.createElement('div');
   wrap.id = 'home-os-kiosk-scroll-buttons';
   wrap.style.cssText = 'position:fixed;inset:0;pointer-events:none;z-index:2147483646';
-  wrap.appendChild(makeScrollButton('▲', -320, '104px'));
-  wrap.appendChild(makeScrollButton('▼', 320, '24px'));
+  wrap.appendChild(makeScrollButton('▲', -320, '144px'));
+  wrap.appendChild(makeScrollButton('▼', 320, '64px'));
   document.body.appendChild(wrap);
 }
 
