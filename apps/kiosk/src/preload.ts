@@ -199,26 +199,25 @@ input, textarea, select,
   user-select: text !important;
   touch-action: manipulation !important;
 }
-/* Fat scrollbars for finger-friendly dragging on the kiosk. */
+/* Custom kiosk scrollbar thumb handles its own pointer events and must
+   NOT have the global pan-y touch-action override or the browser will
+   treat finger drags as page pans instead of firing pointermove. */
+#home-os-kiosk-scroll-track,
+#home-os-kiosk-scroll-track * {
+  touch-action: none !important;
+}
+/* Fat scrollbars for finger-friendly dragging on the kiosk. Note: native
+   webkit-scrollbar thumbs don't respond to touch drag in Chromium, so we
+   also render a custom draggable thumb overlay (see installScrollThumb).
+   Keep the native bar fairly thin so it doesn't visually compete. */
 ::-webkit-scrollbar {
-  width: 32px !important;
-  height: 32px !important;
+  width: 10px !important;
+  height: 10px !important;
 }
-::-webkit-scrollbar-track {
-  background: rgba(0, 0, 0, 0.08) !important;
-  border-radius: 16px !important;
-}
+::-webkit-scrollbar-track { background: transparent !important; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.45) !important;
-  border: 6px solid transparent !important;
-  background-clip: padding-box !important;
-  border-radius: 16px !important;
-  min-height: 80px !important;
-}
-::-webkit-scrollbar-thumb:hover,
-::-webkit-scrollbar-thumb:active {
-  background: rgba(0, 0, 0, 0.65) !important;
-  background-clip: padding-box !important;
+  background: rgba(0, 0, 0, 0.25) !important;
+  border-radius: 8px !important;
 }
 ::-webkit-scrollbar-corner { background: transparent !important; }
 `;
@@ -230,6 +229,7 @@ function install(): void {
   installTouchScrollPolyfill();
   installOverlay();
   installScrollButtons();
+  installScrollThumb();
   startIdleLoop();
   installOskTrigger();
 }
@@ -356,6 +356,176 @@ function installScrollButtons(): void {
 }
 
 // ---------------------------------------------------------------------------
+// Custom draggable scrollbar overlay.
+//
+// Chromium's native ::-webkit-scrollbar thumb does not respond to touch
+// drag, so we render our own fat thumb on a fixed track on the right edge
+// that mirrors the active scroll root's position and can be dragged with
+// finger or pointer to jump anywhere in the content.
+// ---------------------------------------------------------------------------
+
+function installScrollThumb(): void {
+  const TRACK_WIDTH = 40;
+  const TRACK_RIGHT = 80; // leave room for the arrow buttons on the far edge
+  const TRACK_TOP = 16;
+  const TRACK_BOTTOM = 200; // clear arrow buttons + status bar padding
+  const THUMB_MIN_H = 80;
+
+  const track = document.createElement('div');
+  track.id = 'home-os-kiosk-scroll-track';
+  track.style.cssText = [
+    'position:fixed',
+    `right:${TRACK_RIGHT}px`,
+    `top:${TRACK_TOP}px`,
+    `bottom:${TRACK_BOTTOM}px`,
+    `width:${TRACK_WIDTH}px`,
+    'background:rgba(15,23,42,0.08)',
+    'border-radius:20px',
+    'z-index:2147483645',
+    'touch-action:none',
+    'pointer-events:auto',
+    'user-select:none',
+    '-webkit-user-select:none',
+    'display:none',
+  ].join(';');
+
+  const thumb = document.createElement('div');
+  thumb.id = 'home-os-kiosk-scroll-thumb';
+  thumb.style.cssText = [
+    'position:absolute',
+    'left:4px',
+    'right:4px',
+    'top:0',
+    `height:${THUMB_MIN_H}px`,
+    'background:rgba(15,23,42,0.55)',
+    'border-radius:16px',
+    'box-shadow:0 4px 12px rgba(0,0,0,0.25)',
+    'touch-action:none',
+    'transition:background 120ms',
+  ].join(';');
+  track.appendChild(thumb);
+  document.body.appendChild(track);
+
+  const getTargetMetrics = (): {
+    target: Element | Window;
+    scrollTop: number;
+    scrollHeight: number;
+    clientHeight: number;
+  } => {
+    const target = findScrollRoot();
+    if (target === window) {
+      const doc = document.scrollingElement || document.documentElement;
+      return {
+        target,
+        scrollTop: window.scrollY,
+        scrollHeight: doc.scrollHeight,
+        clientHeight: window.innerHeight,
+      };
+    }
+    const el = target as Element;
+    return {
+      target,
+      scrollTop: el.scrollTop,
+      scrollHeight: el.scrollHeight,
+      clientHeight: el.clientHeight,
+    };
+  };
+
+  const setScrollTop = (target: Element | Window, top: number): void => {
+    if (target === window) {
+      window.scrollTo({ top, left: 0, behavior: 'auto' });
+    } else {
+      (target as Element).scrollTop = top;
+    }
+  };
+
+  let trackHeight = 0;
+  let thumbHeight = THUMB_MIN_H;
+
+  const sync = (): void => {
+    const { scrollTop, scrollHeight, clientHeight } = getTargetMetrics();
+    trackHeight = track.clientHeight;
+    const scrollable = scrollHeight - clientHeight;
+    if (scrollable <= 1 || trackHeight <= 0) {
+      track.style.display = 'none';
+      return;
+    }
+    track.style.display = 'block';
+    thumbHeight = Math.max(THUMB_MIN_H, (clientHeight / scrollHeight) * trackHeight);
+    const maxThumbTop = Math.max(0, trackHeight - thumbHeight);
+    const t = scrollTop / scrollable;
+    const thumbTop = t * maxThumbTop;
+    thumb.style.height = `${thumbHeight}px`;
+    thumb.style.transform = `translateY(${thumbTop}px)`;
+  };
+
+  // Keep the thumb synced with scroll position — listen broadly since the
+  // active scroll root may change (e.g., route change).
+  window.addEventListener('scroll', sync, { capture: true, passive: true });
+  window.addEventListener('resize', sync);
+  // Periodic sync catches route changes / dynamic content growth.
+  setInterval(sync, 500);
+  requestAnimationFrame(sync);
+
+  // Drag handling: pressing anywhere on the track jumps+drags from that
+  // point. We translate pointer Y inside the track into a scrollTop.
+  let dragging = false;
+  let dragPointerId: number | null = null;
+  let dragOffset = 0; // finger offset from top of thumb when drag began
+
+  const pointerToScrollTop = (clientY: number): number => {
+    const rect = track.getBoundingClientRect();
+    const { scrollHeight, clientHeight } = getTargetMetrics();
+    const scrollable = scrollHeight - clientHeight;
+    const maxThumbTop = Math.max(0, rect.height - thumbHeight);
+    let thumbTop = clientY - rect.top - dragOffset;
+    if (thumbTop < 0) thumbTop = 0;
+    if (thumbTop > maxThumbTop) thumbTop = maxThumbTop;
+    return maxThumbTop > 0 ? (thumbTop / maxThumbTop) * scrollable : 0;
+  };
+
+  const onDown = (e: PointerEvent): void => {
+    e.preventDefault();
+    dragging = true;
+    dragPointerId = e.pointerId;
+    try { track.setPointerCapture(e.pointerId); } catch {}
+    thumb.style.background = 'rgba(15,23,42,0.78)';
+
+    const thumbRect = thumb.getBoundingClientRect();
+    // If the tap was on the thumb, preserve grip offset; otherwise jump
+    // so the thumb re-centers under the finger.
+    if (e.clientY >= thumbRect.top && e.clientY <= thumbRect.bottom) {
+      dragOffset = e.clientY - thumbRect.top;
+    } else {
+      dragOffset = thumbHeight / 2;
+    }
+    const { target } = getTargetMetrics();
+    setScrollTop(target, pointerToScrollTop(e.clientY));
+    sync();
+  };
+
+  const onMove = (e: PointerEvent): void => {
+    if (!dragging || e.pointerId !== dragPointerId) return;
+    const { target } = getTargetMetrics();
+    setScrollTop(target, pointerToScrollTop(e.clientY));
+    sync();
+  };
+
+  const onUp = (e: PointerEvent): void => {
+    if (e.pointerId !== dragPointerId) return;
+    dragging = false;
+    dragPointerId = null;
+    thumb.style.background = 'rgba(15,23,42,0.55)';
+    try { track.releasePointerCapture(e.pointerId); } catch {}
+  };
+
+  track.addEventListener('pointerdown', onDown);
+  track.addEventListener('pointermove', onMove);
+  track.addEventListener('pointerup', onUp);
+  track.addEventListener('pointercancel', onUp);
+}
+
+// ---------------------------------------------------------------------------
 // Touch-scroll polyfill.
 //
 // On Electron/Wayland with labwc, touchscreen events are delivered to
@@ -399,6 +569,13 @@ function installTouchScrollPolyfill(): void {
       // Don't hijack scrolling for inputs / contenteditable so caret
       // placement still works.
       if (isEditable(t.target)) {
+        activeTarget = null;
+        return;
+      }
+      // Don't hijack when the touch started on our custom scroll track —
+      // the track has its own pointer-driven drag handler.
+      const tgtEl = t.target as Element | null;
+      if (tgtEl && tgtEl.closest && tgtEl.closest('#home-os-kiosk-scroll-track')) {
         activeTarget = null;
         return;
       }
