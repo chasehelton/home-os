@@ -199,6 +199,28 @@ input, textarea, select,
   user-select: text !important;
   touch-action: manipulation !important;
 }
+/* Fat scrollbars for finger-friendly dragging on the kiosk. */
+::-webkit-scrollbar {
+  width: 32px !important;
+  height: 32px !important;
+}
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.08) !important;
+  border-radius: 16px !important;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.45) !important;
+  border: 6px solid transparent !important;
+  background-clip: padding-box !important;
+  border-radius: 16px !important;
+  min-height: 80px !important;
+}
+::-webkit-scrollbar-thumb:hover,
+::-webkit-scrollbar-thumb:active {
+  background: rgba(0, 0, 0, 0.65) !important;
+  background-clip: padding-box !important;
+}
+::-webkit-scrollbar-corner { background: transparent !important; }
 `;
   document.head.appendChild(style);
 }
