@@ -12,7 +12,10 @@ export default defineConfig({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       injectManifest: {
-        globPatterns: ['**/*.{js,css,html,svg,png,ico,webmanifest}'],
+        // Do NOT precache index.html — the SW serves it with a NetworkFirst
+        // navigation handler so a freshly deployed build is never hidden
+        // behind a stale cached shell.
+        globPatterns: ['**/*.{js,css,svg,png,ico,webmanifest}'],
       },
       manifest: {
         name: 'home-os',
