@@ -218,7 +218,21 @@ export async function registerCalendarRoutes(app: FastifyInstance) {
     // Safety: calendar account MUST bind to the currently logged-in user's
     // Google identity. Otherwise a household member could attach the other
     // member's calendar to their own app account.
+    //
+    // A user may have been provisioned without a googleSub (e.g. via the
+    // kiosk-token auth path, which pre-creates an account from
+    // HOME_OS_KIOSK_USER_EMAIL). In that case, if this calendar OAuth
+    // grant comes from Google with the same verified email, claim the
+    // googleSub onto the row so subsequent calendar connects and Google
+    // OIDC logins see a fully linked account.
     const me = req.user!;
+    if (!me.googleSub && grantedEmail && grantedEmail === me.email.toLowerCase()) {
+      db.update(schema.users)
+        .set({ googleSub: grantedSub })
+        .where(eq(schema.users.id, me.id))
+        .run();
+      me.googleSub = grantedSub;
+    }
     if (!me.googleSub || me.googleSub !== grantedSub) {
       logAudit(db, {
         actorUserId: me.id,

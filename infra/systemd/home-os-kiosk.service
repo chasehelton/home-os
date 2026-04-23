@@ -1,37 +1,53 @@
-# EXAMPLE systemd unit — not yet wired into CI or provisioning. The real
-# Pi deployment wiring (display session handling, Tailscale-up, etc.) lands
-# in Phase 10. This file is kept here so ops has a starting point.
+# home-os kiosk — user systemd unit, Wayland (labwc) edition.
 #
-# Install:
-#   sudo cp home-os-kiosk.service /etc/systemd/system/
-#   sudo systemctl daemon-reload
-#   sudo systemctl enable --now home-os-kiosk.service
+# Install (once per Pi):
+#   mkdir -p ~/.config/systemd/user
+#   cp infra/systemd/home-os-kiosk.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now home-os-kiosk.service
+#   # Survive logout — without this, user services stop when the last session ends.
+#   sudo loginctl enable-linger "$USER"
 #
-# Assumptions (must adjust for your Pi setup):
-#   - DISPLAY=:0 and a running graphical session owned by the `pi` user.
-#   - home-os checked out at /opt/home-os, built with `pnpm -r build`.
-#   - Electron invoked via the `electron` binary in node_modules/.bin.
+# Logs:
+#   journalctl --user -u home-os-kiosk.service -f
+#
+# Why a user service, not a system service?
+#   The Pi runs labwc (Wayland) in the user's graphical session. The kiosk
+#   must connect to the user's wayland-0 socket, XDG_RUNTIME_DIR, dbus, and
+#   inherit ID_SEAT. A user service under /run/user/UID does all of that for
+#   free; a system service would need to hand-stitch every env.
+#
 [Unit]
-Description=home-os kiosk (Electron fullscreen UI)
-# NOTE: graphical.target != "the desktop is actually painting". On Wayland
-# or a bespoke session you likely need a user-service under
-# graphical-session.target instead. Revisit in Phase 10.
-After=graphical.target network-online.target
-Wants=graphical.target network-online.target
+Description=home-os kiosk (Electron fullscreen UI on Wayland)
+After=default.target
+Wants=network-online.target
 
 [Service]
 Type=simple
-User=pi
-WorkingDirectory=/opt/home-os/apps/kiosk
-Environment=DISPLAY=:0
-Environment=HOME_OS_KIOSK_URL=http://localhost:8080
-Environment=HOME_OS_KIOSK_HEALTH_URL=http://localhost:8080/health/live
-ExecStart=/opt/home-os/node_modules/.bin/electron /opt/home-os/apps/kiosk/dist/main.js
+# Point the kiosk at the tailnet HTTPS hostname — same-origin as the API so
+# cookies / service worker / push all behave identically to the browser.
+Environment=HOME_OS_KIOSK_URL=https://pi4.tailebbd07.ts.net
+Environment=HOME_OS_KIOSK_MODE=1
+# OSK is now on-demand (shown only when an input field has focus), so
+# we do NOT reserve screen space for it; Electron fills the display and
+# wvkbd overlays the bottom transiently. Leave at 0 unless you switch
+# wvkbd back to always-visible mode.
+Environment=HOME_OS_KIOSK_OSK_HEIGHT=0
+# Kiosk device auth — Electron cannot complete Google OAuth (Google blocks
+# embedded browsers), so the kiosk logs in via POST /auth/kiosk using a
+# bearer secret stored in a local EnvironmentFile. Path must be root-owned
+# 0600 and contain HOME_OS_KIOSK_TOKEN=<>. See docs/DEPLOYMENT.md.
+EnvironmentFile=-/etc/home-os-kiosk.env
+# Wayland socket created by labwc. XDG_RUNTIME_DIR comes from PAM.
+Environment=WAYLAND_DISPLAY=wayland-0
+# Electron 20+ on some Linux distros needs this to silence an ANGLE warning.
+Environment=ELECTRON_OZONE_PLATFORM_HINT=wayland
+ExecStart=%h/repos/home-os/apps/kiosk/scripts/launch.sh
 Restart=always
 RestartSec=3
-# Don't spam restarts if something is fundamentally wrong.
+# If Electron is crashing on boot, don't burn CPU restarting forever.
 StartLimitIntervalSec=60
 StartLimitBurst=10
 
 [Install]
-WantedBy=graphical.target
+WantedBy=default.target

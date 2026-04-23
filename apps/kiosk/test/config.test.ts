@@ -48,4 +48,12 @@ describe('kiosk config', () => {
     expect(cfg.idleMs).toBe(5 * 60_000);
     expect(cfg.healthFailureThreshold).toBe(2);
   });
+
+  it('leaves kioskToken null by default and reads HOME_OS_KIOSK_TOKEN', () => {
+    expect(loadConfig({} as NodeJS.ProcessEnv).kioskToken).toBeNull();
+    expect(loadConfig({ HOME_OS_KIOSK_TOKEN: '   ' } as NodeJS.ProcessEnv).kioskToken).toBeNull();
+    expect(
+      loadConfig({ HOME_OS_KIOSK_TOKEN: 'sekret' } as NodeJS.ProcessEnv).kioskToken,
+    ).toBe('sekret');
+  });
 });

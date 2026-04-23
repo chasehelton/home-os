@@ -64,6 +64,13 @@
       "when": 1776871989807,
       "tag": "0008_majestic_dracula",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1776954119686,
+      "tag": "0009_early_emma_frost",
+      "breakpoints": true
     }
   ]
 }

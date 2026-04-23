@@ -527,7 +527,9 @@ function AgendaView({
 // -------------------------------------------------------------------------
 
 const PX_PER_HOUR = 48;
-const HOURS_TOTAL = 24;
+const DAY_START_HOUR = 5;
+const DAY_END_HOUR = 24;
+const HOURS_TOTAL = DAY_END_HOUR - DAY_START_HOUR;
 
 function WeekView({
   events,
@@ -645,15 +647,18 @@ function WeekView({
       >
         {/* hour gutter */}
         <div className="relative border-r border-outline-variant/40">
-          {Array.from({ length: HOURS_TOTAL }, (_, h) => (
-            <div
-              key={h}
-              className="absolute right-1 -translate-y-1/2 text-label-sm text-on-surface-variant/70"
-              style={{ top: `${h * PX_PER_HOUR}px` }}
-            >
-              {h === 0 ? '' : `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`}
-            </div>
-          ))}
+          {Array.from({ length: HOURS_TOTAL }, (_, i) => {
+            const h = i + DAY_START_HOUR;
+            return (
+              <div
+                key={h}
+                className="absolute right-1 -translate-y-1/2 text-label-sm text-on-surface-variant/70"
+                style={{ top: `${i * PX_PER_HOUR}px` }}
+              >
+                {i === 0 ? '' : `${h % 12 === 0 ? 12 : h % 12}${h < 12 ? 'a' : 'p'}`}
+              </div>
+            );
+          })}
         </div>
 
         {/* day columns */}
@@ -685,13 +690,15 @@ function WeekView({
                 const dayStart = new Date(d);
                 dayStart.setHours(0, 0, 0, 0);
                 const dayEnd = addDays(dayStart, 1);
-                const top =
-                  Math.max(0, (s.getTime() - dayStart.getTime()) / 3_600_000) * PX_PER_HOUR;
-                const bottom =
-                  Math.min(HOURS_TOTAL, (en.getTime() - dayStart.getTime()) / 3_600_000) *
-                  PX_PER_HOUR;
-                const height = Math.max(18, bottom - top);
-                const clippedLeft = s < dayStart;
+                const startHours = (s.getTime() - dayStart.getTime()) / 3_600_000;
+                const endHours = (en.getTime() - dayStart.getTime()) / 3_600_000;
+                // Skip events that end before the visible window starts.
+                if (endHours <= DAY_START_HOUR) return null;
+                const visStart = Math.max(DAY_START_HOUR, startHours);
+                const visEnd = Math.min(DAY_END_HOUR, endHours);
+                const top = (visStart - DAY_START_HOUR) * PX_PER_HOUR;
+                const height = Math.max(18, (visEnd - visStart) * PX_PER_HOUR);
+                const clippedLeft = s < dayStart || startHours < DAY_START_HOUR;
                 const clippedRight = en > dayEnd;
                 return (
                   <div
@@ -727,7 +734,9 @@ function NowLine() {
     return () => clearInterval(h);
   }, []);
   const ms = now.getHours() * 3_600_000 + now.getMinutes() * 60_000;
-  const top = (ms / 3_600_000) * PX_PER_HOUR;
+  const hours = ms / 3_600_000;
+  if (hours < DAY_START_HOUR) return null;
+  const top = (hours - DAY_START_HOUR) * PX_PER_HOUR;
   return (
     <div
       className="pointer-events-none absolute inset-x-0 z-10 border-t-2 border-danger"

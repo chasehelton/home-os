@@ -1,0 +1,43 @@
+# home-os on-screen keyboard — user systemd unit (wvkbd on Wayland).
+#
+# Why wvkbd and not squeekboard?
+#   squeekboard is designed for Phosh and only auto-shows when it receives
+#   a text-input-v3 enable event from a focused field. On labwc + Electron
+#   that handshake is unreliable, so the keyboard rarely appears. wvkbd
+#   is a wlroots-native OSK that uses virtual-keyboard-v1 to inject key
+#   events directly — it works with any app that takes keyboard focus,
+#   including Electron, Chromium, Firefox, and the login manager.
+#
+# Why a layer-shell TOP surface with exclusive zone?
+#   wvkbd reserves its own vertical space at the bottom of the screen.
+#   Combined with Electron sizing itself to screen.workAreaSize (see
+#   apps/kiosk/src/main.ts), the UI and keyboard never overlap.
+#
+# Install (once per Pi):
+#   mkdir -p ~/.config/systemd/user
+#   cp infra/systemd/home-os-osk.service ~/.config/systemd/user/
+#   systemctl --user daemon-reload
+#   systemctl --user enable --now home-os-osk.service
+#
+[Unit]
+Description=home-os on-screen keyboard (wvkbd for Wayland/labwc)
+After=default.target
+# Pair with the kiosk: when the kiosk stops for maintenance, the OSK
+# doesn't need to keep reserving screen space.
+PartOf=home-os-kiosk.service
+Before=home-os-kiosk.service
+
+[Service]
+Type=simple
+Environment=WAYLAND_DISPLAY=wayland-0
+# Height in pixels for both portrait and landscape; the Pi monitor is
+# landscape so only -L matters, but -H is set for completeness.
+ExecStart=/usr/bin/wvkbd-mobintl --hidden -L 320 -H 360 --bg 222222 --fg 333333 --text ffffff --fg-sp 444444
+Restart=on-failure
+RestartSec=3
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Install]
+WantedBy=default.target
+WantedBy=home-os-kiosk.service

@@ -195,6 +195,52 @@ additionally **overrides** a few values that must be production-safe:
 `HOME_OS_SESSION_SECRET`, `HOME_OS_TOKEN_KEY`, VAPID keys (if push is
 enabled), etc. Never commit `.env`.
 
+### Kiosk device login (`HOME_OS_KIOSK_TOKEN`)
+
+Google blocks OAuth inside embedded browsers (Electron, WebView, etc.),
+so the Pi kiosk cannot sign in via the normal `/auth/google/login`
+flow. Instead it uses a bearer-token endpoint, `POST /auth/kiosk`,
+keyed on two env vars that must be set **together** on the API side:
+
+| Var                          | Notes                                                                                    |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `HOME_OS_KIOSK_TOKEN`        | Random secret, ≥32 chars. Generate with `openssl rand -hex 32`.                          |
+| `HOME_OS_KIOSK_USER_EMAIL`   | The email the kiosk logs in as. Must also appear in `HOME_OS_ALLOWED_EMAILS`.            |
+
+The API auto-creates a `users` row for that email on first call
+(`google_sub` null). Once the same email later signs into Google from a
+real browser, the calendar-connect handler claims the `google_sub` onto
+the existing row, so no duplicate account is produced.
+
+Sessions minted by this path are tagged `auth_method='kiosk'` in the
+`sessions` table; rotating the token invalidates future logins but not
+existing sessions — revoke those by deleting the relevant rows.
+
+**Provisioning (on the Pi):**
+
+```bash
+# API side — append to /home/chasehelton/repos/home-os/.env
+HOME_OS_KIOSK_TOKEN=<32+ hex chars from openssl rand -hex 32>
+HOME_OS_KIOSK_USER_EMAIL=kiosk@yourhousehold.example
+# And make sure HOME_OS_ALLOWED_EMAILS contains that address.
+
+# Kiosk side — /etc/home-os-kiosk.env (root:root 0600)
+sudo install -m 0600 /dev/null /etc/home-os-kiosk.env
+sudo tee /etc/home-os-kiosk.env >/dev/null <<EOF
+HOME_OS_KIOSK_TOKEN=<same value as API side>
+EOF
+
+sudo systemctl restart home-os-api.service
+systemctl --user restart home-os-kiosk.service
+```
+
+The kiosk systemd unit references this file via
+`EnvironmentFile=-/etc/home-os-kiosk.env` (the leading `-` makes it
+non-fatal in dev when the file is absent). The Electron main process
+calls `POST /auth/kiosk` at startup and whenever it reloads the URL;
+the returned `Set-Cookie: sid=…` lands in the default Electron session
+cookie jar and is used by subsequent navigation.
+
 ## Migration safety
 
 Production migrations go through `packages/db/src/migrate-safe.ts`:

@@ -2,12 +2,20 @@
 // BrowserWindow, watches api health, supports cleaning mode + idle dim,
 // and shows an offline diagnostics screen on load failure.
 
-import { app, BrowserWindow, globalShortcut, ipcMain, screen } from 'electron';
+import { app, BrowserWindow, globalShortcut, ipcMain, screen, net, session } from 'electron';
 import * as path from 'node:path';
+import * as fs from 'node:fs';
 import { loadConfig, type KioskConfig } from './config.js';
 import { initialHealthState, onHealthResult, type HealthState } from './health.js';
 
 const cfg: KioskConfig = loadConfig();
+
+// Google (and a handful of other sign-in providers) silently block OAuth
+// when they detect "Electron/x.y.z" in the User-Agent. Spoofing a plain
+// Chrome UA avoids this — Electron 32 is Chromium 128 under the hood, so
+// this UA is truthful about the rendering engine.
+app.userAgentFallback =
+  'Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36';
 
 // Chromium flags for touchscreen kiosks: force touch-event dispatch, disable
 // pinch-zoom (triggered accidentally by two-finger UI taps), and kill the
@@ -23,12 +31,27 @@ app.commandLine.appendSwitch('overscroll-history-navigation', '0');
 
 function buildWindowOptions(): Electron.BrowserWindowConstructorOptions {
   const primary = screen.getPrimaryDisplay();
+  // On Wayland, Electron's workAreaSize does not account for layer-shell
+  // exclusive zones (like the on-screen keyboard at the bottom of the
+  // screen), so we subtract its height manually. Configurable via
+  // HOME_OS_KIOSK_OSK_HEIGHT; set to 0 if no OSK is running.
+  const oskHeight = cfg.oskHeight;
   return {
-    width: primary.workAreaSize.width,
-    height: primary.workAreaSize.height,
-    fullscreen: cfg.kioskMode,
-    kiosk: cfg.kioskMode,
+    width: primary.bounds.width,
+    height: Math.max(primary.bounds.height - oskHeight, 200),
+    x: primary.bounds.x,
+    y: primary.bounds.y,
+    // IMPORTANT: do NOT use Wayland fullscreen/kiosk. A Wayland fullscreen
+    // toplevel is stacked above the `top` layer-shell layer, which
+    // occludes on-screen keyboards (squeekboard, wvkbd) that live there.
+    // A frameless screen-sized window looks identical and cooperates with
+    // the OSK. We still enforce kiosk semantics via will-navigate +
+    // window-open handlers and a hidden cursor (below).
+    fullscreen: false,
+    kiosk: false,
     frame: !cfg.kioskMode,
+    resizable: false,
+    movable: false,
     autoHideMenuBar: true,
     backgroundColor: '#0f172a',
     webPreferences: {
@@ -55,6 +78,17 @@ const MAX_LOAD_FAILURES = 5;
 function createWindow(): void {
   const win = new BrowserWindow(buildWindowOptions());
   mainWindow = win;
+
+  // Forward renderer/preload console messages to the main process stdout
+  // so journalctl --user -u home-os-kiosk.service shows them.
+  win.webContents.on('console-message', (_e, level, message, line, sourceId) => {
+    if (level >= 2 || /^\[kiosk-preload\]/.test(message)) {
+      console.log(`[renderer L${level}] ${message} (${sourceId}:${line})`);
+    }
+  });
+  win.webContents.on('preload-error', (_e, preloadPath, error) => {
+    console.error(`[kiosk] preload-error in ${preloadPath}:`, error);
+  });
 
   // Hide mouse cursor in kiosk mode — pure CSS injected after load.
   win.webContents.on('did-finish-load', () => {
@@ -86,17 +120,72 @@ function createWindow(): void {
     }
     const delay = Math.min(1000 * 2 ** (loadFailures - 1), 30_000);
     setTimeout(() => {
-      void win.loadURL(cfg.url);
+      void loadWithKioskLogin(win);
     }, delay);
   });
 
   // Auto-relaunch on renderer crash.
   win.webContents.on('render-process-gone', (_e, details) => {
     if (details.reason === 'clean-exit') return;
-    void win.loadURL(cfg.url);
+    void loadWithKioskLogin(win);
   });
 
-  void win.loadURL(cfg.url);
+  void loadWithKioskLogin(win);
+}
+
+// ---------------------------------------------------------------------------
+// Kiosk device login — bearer-token handshake against POST /auth/kiosk.
+//
+// Google blocks OAuth inside Electron, so the kiosk authenticates via a
+// long-lived secret provisioned on the Pi (HOME_OS_KIOSK_TOKEN). The
+// resulting Set-Cookie lands in the default session's cookie jar, which
+// the BrowserWindow shares, so subsequent navigation to cfg.url is logged
+// in. The API must be same-origin with cfg.url so the cookie applies.
+// ---------------------------------------------------------------------------
+
+async function loadWithKioskLogin(win: BrowserWindow): Promise<void> {
+  if (cfg.kioskToken) {
+    try {
+      await kioskLogin(cfg.url, cfg.kioskToken);
+    } catch (err) {
+      console.warn(
+        '[kiosk] /auth/kiosk login failed; loading URL anyway (app will show login screen):',
+        err,
+      );
+    }
+  }
+  await win.loadURL(cfg.url);
+}
+
+function kioskLogin(appUrl: string, token: string): Promise<void> {
+  const origin = new URL(appUrl).origin;
+  const endpoint = `${origin}/auth/kiosk`;
+  return new Promise((resolve, reject) => {
+    const req = net.request({
+      method: 'POST',
+      url: endpoint,
+      // Use the default session so any Set-Cookie lands in the same jar
+      // that the BrowserWindow uses when it navigates to cfg.url.
+      session: session.defaultSession,
+      useSessionCookies: true,
+    });
+    req.setHeader('Authorization', `Bearer ${token}`);
+    req.on('response', (res) => {
+      let body = '';
+      res.on('data', (chunk) => {
+        body += chunk.toString('utf8');
+      });
+      res.on('end', () => {
+        if (res.statusCode && res.statusCode >= 200 && res.statusCode < 300) {
+          resolve();
+        } else {
+          reject(new Error(`/auth/kiosk ${res.statusCode}: ${body.slice(0, 200)}`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.end();
+  });
 }
 
 async function loadDiagnostics(
@@ -190,10 +279,70 @@ ipcMain.handle('kiosk:config', () => ({
 }));
 
 // ---------------------------------------------------------------------------
+// On-screen keyboard bridge.
+//
+// The wvkbd process runs as its own systemd unit started with --hidden.
+// It listens for SIGUSR2 (show) and SIGUSR1 (hide). Renderer preload
+// sends these IPC events on focusin/focusout of editable elements.
+// PID is discovered lazily and re-resolved if the signal fails (e.g.
+// after wvkbd was restarted by its systemd unit).
+// ---------------------------------------------------------------------------
+
+const OSK_COMM = 'wvkbd-mobintl';
+let oskPidCache: number | null = null;
+
+function findOskPid(): number | null {
+  try {
+    for (const dir of fs.readdirSync('/proc')) {
+      if (!/^\d+$/.test(dir)) continue;
+      let comm: string;
+      try {
+        comm = fs.readFileSync(`/proc/${dir}/comm`, 'utf8').trim();
+      } catch {
+        continue;
+      }
+      if (comm === OSK_COMM) return Number(dir);
+    }
+  } catch {
+    // /proc may not exist on non-linux — caller logs.
+  }
+  return null;
+}
+
+function signalOsk(signal: 'SIGUSR1' | 'SIGUSR2'): void {
+  const trySignal = (): boolean => {
+    if (oskPidCache == null) return false;
+    try {
+      process.kill(oskPidCache, signal);
+      console.log(`[kiosk] sent ${signal} to wvkbd pid=${oskPidCache}`);
+      return true;
+    } catch (err) {
+      console.warn(`[kiosk] signal ${signal} failed on pid=${oskPidCache}:`, err);
+      oskPidCache = null;
+      return false;
+    }
+  };
+  if (trySignal()) return;
+  oskPidCache = findOskPid();
+  console.log(`[kiosk] resolved wvkbd pid=${oskPidCache}`);
+  if (oskPidCache != null) trySignal();
+}
+
+ipcMain.on('kiosk:osk-show', () => {
+  console.log('[kiosk] osk-show IPC received');
+  signalOsk('SIGUSR2');
+});
+ipcMain.on('kiosk:osk-hide', () => {
+  console.log('[kiosk] osk-hide IPC received');
+  signalOsk('SIGUSR1');
+});
+
+// ---------------------------------------------------------------------------
 // Lifecycle
 // ---------------------------------------------------------------------------
 
 app.whenReady().then(() => {
+  console.log('[kiosk] app ready, cfg:', { url: cfg.url, hasKioskToken: !!cfg.kioskToken, oskHeight: cfg.oskHeight });
   createWindow();
   startHealthLoop();
 
